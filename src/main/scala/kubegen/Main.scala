@@ -35,7 +35,7 @@ object Main {
     }.mkString(",\n  ")
 
     val modelImports = properties.values.toList.collect {
-      case p: RefProperty =>
+      case p: RefProperty if packageOf(p.getSimpleRef) != packageName =>
         s"import ${p.getSimpleRef}"
     }.mkString("\n")
 
@@ -44,11 +44,24 @@ object Main {
       |
       |$modelImports
       |
+      |import cats.effect.IO
+      |
+      |import org.http4s.{EntityDecoder, EntityEncoder}
+      |import org.http4s.circe._
+      |
+      |import io.circe.{Encoder, Decoder}
+      |import io.circe.generic.semiauto._
+      |
       |case class $simpleName(
       |  $fieldsScalaCode
       |)
       |
       |object $simpleName {
+      |  implicit val `${fullName}-Decoder`: Decoder[$simpleName] = deriveDecoder
+      |  implicit val `${fullName}-Encoder`: Encoder[$simpleName] = deriveEncoder
+      |
+      |  implicit val `${fullName}-EntityDecoder`: EntityDecoder[IO, $simpleName] = jsonOf
+      |  implicit val `${fullName}-EntityEncoder`: EntityEncoder[IO, $simpleName] = jsonEncoderOf
       |}
     """.stripMargin
   }
@@ -123,4 +136,7 @@ object Main {
 
   def simpleNameOf(fullyQualifiedName: String): String =
     fullyQualifiedName.split('.').last
+  
+  def packageOf(fullyQualifiedName: String): String =
+    fullyQualifiedName.split('.').init.mkString(".")
 }
