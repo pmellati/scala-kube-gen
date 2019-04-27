@@ -63,7 +63,7 @@ object Main {
       case "string" =>
         "// string model type - what do we need here?"
       case other =>
-        throw new NotImplementedError(s"Model type: $other")
+        throw new NotImplementedError(s"Model type: $other\nModel name: $fullName")
     }
   }
 
@@ -115,7 +115,7 @@ object Main {
   }
 
   // TODO: Not exhaustive.
-  def writePropertyType(p: Property): String = {
+  def writePropertyType(p: Property, optionisationIsEnabled: Boolean = true): String = {
     val typeWithoutOptionisation = p match {
       case p: StringProperty =>
         "String"
@@ -123,20 +123,27 @@ object Main {
         "Int"
       case p: LongProperty =>
         "Long"
+      case p: DoubleProperty =>
+        "Double"
       case p: BooleanProperty =>
         "Boolean"
       case p: RefProperty =>
         val fullyQualifiedName = p.getOriginalRef
         // TODO: import the other class.
         simpleNameOf(fullyQualifiedName)
+      case p: ArrayProperty => 
+        val elementType = writePropertyType(p.getItems, optionisationIsEnabled = false)
+        s"List[$elementType]"
+      case p: MapProperty =>
+        "Not implemented: MapProperty" // TODO: Implement.
       case p =>
         throw new NotImplementedError(s"Property of class: ${p.getClass}")
     }
 
-    if(p.getRequired)
-      typeWithoutOptionisation
-    else
+    if(optionisationIsEnabled && !p.getRequired)
       s"Option[$typeWithoutOptionisation] = None"
+    else
+      typeWithoutOptionisation
   }
 
   def writeOperation(swagger: Swagger, op: Operation): String = {
