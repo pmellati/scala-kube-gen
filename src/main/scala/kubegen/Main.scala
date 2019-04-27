@@ -1,6 +1,12 @@
 package kubegen;
 
+import java.nio.file.{Path, Paths}
+import java.io.PrintWriter
+
 import scala.collection.JavaConverters._
+
+import cats.effect.IO
+import cats.implicits._
 
 import io.swagger.parser.SwaggerParser
 import io.swagger.models._, parameters._, properties._
@@ -19,12 +25,50 @@ object Main {
     val nodeModelName = "io.k8s.api.core.v1.Node"
     val nodeModel     = definitions(nodeModelName)
 
-    println("=====================================")
-    println(writeModel(nodeModelName, nodeModel))
-    println("=====================================")
+    // println("=====================================")
+    // println(writeModel(nodeModelName, nodeModel))
+    // println("=====================================")
+
+    val outputProjectDir = Paths.get("/var/tmp/outt")
+
+    val writeModelFiles = definitions.toList.traverse { case (modelName, model) =>
+      val filePath: Path = outputProjectDir.resolve("models").resolve(s"$modelName.scala")
+      val fileContent: String = writeModel(modelName, model)
+      createFile(filePath, fileContent)
+    }
+
+    writeModelFiles.unsafeRunSync()
   }
 
-  def writeModel(fullName: String, m: Model): String = {
+  // TODO: Use a better library for file system operations.
+  def createFile(path: Path, text: String): IO[Unit] = IO {
+    path.getParent.toFile.mkdirs()
+
+    val file = path.toFile
+    file.createNewFile()
+
+    val writer = new PrintWriter(file)
+    writer.write(text)
+    writer.close()
+  }
+
+  // TODO: Move all model translation code into separate object.
+  def writeModel(fullName: String, model: Model): String = {
+    // The 'Model' interface lacks essential methods. So, cast to the only implementation.
+    val m = model.asInstanceOf[ModelImpl]
+
+    m.getType match {
+      case "object" => 
+        writeObjectModel(fullName, m)
+      case "string" =>
+        "// string model type - what do we need here?"
+      case other =>
+        throw new NotImplementedError(s"Model type: $other")
+    }
+  }
+
+  /** Write a `Model` where `.getType` returns "object". */
+  def writeObjectModel(fullName: String, m: Model): String = {
     val packageName = fullName.split('.').init.mkString(".")
     val simpleName  = fullName.split('.').last
 
@@ -70,10 +114,17 @@ object Main {
     s"$name: ${writePropertyType(p)}"
   }
 
+  // TODO: Not exhaustive.
   def writePropertyType(p: Property): String = {
     val typeWithoutOptionisation = p match {
       case p: StringProperty =>
         "String"
+      case p: IntegerProperty =>
+        "Int"
+      case p: LongProperty =>
+        "Long"
+      case p: BooleanProperty =>
+        "Boolean"
       case p: RefProperty =>
         val fullyQualifiedName = p.getOriginalRef
         // TODO: import the other class.
@@ -126,6 +177,8 @@ object Main {
         s"${p.getName}: ${paramType(p.getType)}"
       case p: QueryParameter =>
         s"${p.getName}: ${paramType(p.getType)}"
+      case p =>
+        throw new NotImplementedError(s"Param: $p")
     }
   }
 

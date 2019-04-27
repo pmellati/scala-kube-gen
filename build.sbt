@@ -5,6 +5,7 @@ lazy val root = (project in file("."))
   .settings(
     name := "kubegen",
     libraryDependencies ++= Seq(
-      "io.swagger" % "swagger-parser" % "1.0.44"
+      "io.swagger"    %  "swagger-parser" % "1.0.44",
+      "org.typelevel" %% "cats-effect"    % "1.2.0"
     )
   )
