@@ -61,7 +61,12 @@ object Main {
       case "object" => 
         writeObjectModel(fullName, m)
       case "string" =>
+        println(s"WARN: model $fullName has type 'string'. Not implemented yet.")
         "// string model type - what do we need here?"
+      case null =>
+        println(s"WARN: model $fullName has type 'null'. Not implemented yet.")
+        "// NULL model type - what do we need here?"
+        // throw new NotImplementedError(s"Model type: NULL\nModel name: $fullName")
       case other =>
         throw new NotImplementedError(s"Model type: $other\nModel name: $fullName")
     }
@@ -72,7 +77,15 @@ object Main {
     val packageName = fullName.split('.').init.mkString(".")
     val simpleName  = fullName.split('.').last
 
-    val properties = m.getProperties.asScala.toMap
+    val properties: Map[String, Property] = Option(m.getProperties) match {
+      case None => 
+        // TODO: Use a logging lib.
+        println(s"WARN: properties of 'object' model $fullName is 'null'. Empty case class will be generated.")
+        Map.empty
+      case Some(javaMap) =>
+        javaMap.asScala.toMap
+    }
+
 
     val fieldsScalaCode = properties.map { case (name, prop) =>
       s"${writeProperty(name, prop)}"
@@ -110,22 +123,22 @@ object Main {
     """.stripMargin
   }
 
-  def writeProperty(name: String, p: Property): String = {
+  def writeProperty(name: String, p: Property): String =
     s"$name: ${writePropertyType(p)}"
-  }
 
   // TODO: Not exhaustive.
+  // TODO: Incorrectly named: not returning a type when suffixing with '= None'.
   def writePropertyType(p: Property, optionisationIsEnabled: Boolean = true): String = {
     val typeWithoutOptionisation = p match {
-      case p: StringProperty =>
+      case _: StringProperty =>
         "String"
-      case p: IntegerProperty =>
+      case _: IntegerProperty =>
         "Int"
-      case p: LongProperty =>
+      case _: LongProperty =>
         "Long"
-      case p: DoubleProperty =>
+      case _: DoubleProperty =>
         "Double"
-      case p: BooleanProperty =>
+      case _: BooleanProperty =>
         "Boolean"
       case p: RefProperty =>
         val fullyQualifiedName = p.getOriginalRef
@@ -135,7 +148,8 @@ object Main {
         val elementType = writePropertyType(p.getItems, optionisationIsEnabled = false)
         s"List[$elementType]"
       case p: MapProperty =>
-        "Not implemented: MapProperty" // TODO: Implement.
+        val valueType = writePropertyType(p.getAdditionalProperties, optionisationIsEnabled = false)
+        s"Map[String, $valueType]"  // Note: Key type is always string in an open-api map.
       case p =>
         throw new NotImplementedError(s"Property of class: ${p.getClass}")
     }
