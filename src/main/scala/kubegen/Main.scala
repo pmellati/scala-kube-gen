@@ -29,7 +29,7 @@ object Main {
     // println(writeModel(nodeModelName, nodeModel))
     // println("=====================================")
 
-    val outputProjectDir = Paths.get("/var/tmp/outt")
+    val outputProjectDir = Paths.get("/Users/pouria/src/sample-scala-client/src/main/scala/example")
 
     val writeModelFiles = definitions.toList.traverse { case (modelName, model) =>
       val filePath: Path = outputProjectDir.resolve("models").resolve(s"$modelName.scala")
