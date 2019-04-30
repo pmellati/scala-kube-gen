@@ -63,8 +63,7 @@ object Main {
       case "object" => 
         writeObjectModel(fullName, m)
       case "string" =>
-        println(s"WARN: model $fullName has type 'string'. Not implemented yet.")
-        "// string model type - what do we need here?"
+        writeStringModel(fullName)
       case null =>
         println(s"WARN: model $fullName has type 'null'. Not implemented yet.")
         "// NULL model type - what do we need here?"
@@ -74,10 +73,39 @@ object Main {
     }
   }
 
+  // TODO: The circe encoder and decoder are incorrect.
+  /** Write a `Model` where `.getType` returns "string". We translate these as scala value classes. */
+  def writeStringModel(fullName: String): String = {
+    val packageNameSanitised = sanitiseFqn(packageOf(fullName))
+    val simpleNameSanitised  = ident(simpleNameOf(fullName))
+
+    s"""
+      |package $packageNameSanitised
+      |
+      |import cats.effect.IO
+      |
+      |import org.http4s.{EntityDecoder, EntityEncoder}
+      |import org.http4s.circe._
+      |
+      |import io.circe.{Encoder, Decoder}
+      |import io.circe.generic.semiauto._
+      |
+      |case class $simpleNameSanitised(value: String) extends AnyVal
+      |
+      |object $simpleNameSanitised {
+      |  implicit val `io.k8s.apimachinery.pkg.apis.meta.v1.$simpleNameSanitised-Decoder`: Decoder[$simpleNameSanitised] = deriveDecoder
+      |  implicit val `io.k8s.apimachinery.pkg.apis.meta.v1.$simpleNameSanitised-Encoder`: Encoder[$simpleNameSanitised] = deriveEncoder
+      |
+      |  implicit val `io.k8s.apimachinery.pkg.apis.meta.v1.$simpleNameSanitised-EntityDecoder`: EntityDecoder[IO, $simpleNameSanitised] = jsonOf
+      |  implicit val `io.k8s.apimachinery.pkg.apis.meta.v1.$simpleNameSanitised-EntityEncoder`: EntityEncoder[IO, $simpleNameSanitised] = jsonEncoderOf
+      |}
+      |""".stripMargin
+  }
+
   /** Write a `Model` where `.getType` returns "object". */
   def writeObjectModel(fullName: String, m: Model): String = {
-    val packageName          = fullName.split('.').init.mkString(".")
-    val simpleNameSanitised  = ident(fullName.split('.').last)
+    val packageName         = fullName.split('.').init.mkString(".")
+    val simpleNameSanitised = ident(fullName.split('.').last)
 
     val properties: Map[String, Property] = Option(m.getProperties) match {
       case None => 
@@ -96,7 +124,7 @@ object Main {
     val modelImports = properties.values.toList.collect {
       case p: RefProperty if packageOf(p.getSimpleRef) != packageName =>
         s"import ${p.getSimpleRef}"
-    }.mkString("\n")
+    }.toSet.mkString("\n")
 
     s"""
       |package ${sanitiseFqn(packageName)}
