@@ -11,6 +11,8 @@ import cats.implicits._
 import io.swagger.parser.SwaggerParser
 import io.swagger.models._, parameters._, properties._
 
+import Scala._
+
 object Main {
   def main(args: Array[String]) {
     val swagger = new SwaggerParser().read("/Users/pouria/Documents/kube-openapi-spec.json")
@@ -74,8 +76,8 @@ object Main {
 
   /** Write a `Model` where `.getType` returns "object". */
   def writeObjectModel(fullName: String, m: Model): String = {
-    val packageName = fullName.split('.').init.mkString(".")
-    val simpleName  = fullName.split('.').last
+    val packageName          = fullName.split('.').init.mkString(".")
+    val simpleNameSanitised  = ident(fullName.split('.').last)
 
     val properties: Map[String, Property] = Option(m.getProperties) match {
       case None => 
@@ -97,7 +99,7 @@ object Main {
     }.mkString("\n")
 
     s"""
-      |package $packageName
+      |package ${sanitiseFqn(packageName)}
       |
       |$modelImports
       |
@@ -109,22 +111,22 @@ object Main {
       |import io.circe.{Encoder, Decoder}
       |import io.circe.generic.semiauto._
       |
-      |case class $simpleName(
+      |case class $simpleNameSanitised(
       |  $fieldsScalaCode
       |)
       |
-      |object $simpleName {
-      |  implicit val `${fullName}-Decoder`: Decoder[$simpleName] = deriveDecoder
-      |  implicit val `${fullName}-Encoder`: Encoder[$simpleName] = deriveEncoder
+      |object $simpleNameSanitised {
+      |  implicit val `${fullName}-Decoder`: Decoder[$simpleNameSanitised] = deriveDecoder
+      |  implicit val `${fullName}-Encoder`: Encoder[$simpleNameSanitised] = deriveEncoder
       |
-      |  implicit val `${fullName}-EntityDecoder`: EntityDecoder[IO, $simpleName] = jsonOf
-      |  implicit val `${fullName}-EntityEncoder`: EntityEncoder[IO, $simpleName] = jsonEncoderOf
+      |  implicit val `${fullName}-EntityDecoder`: EntityDecoder[IO, $simpleNameSanitised] = jsonOf
+      |  implicit val `${fullName}-EntityEncoder`: EntityEncoder[IO, $simpleNameSanitised] = jsonEncoderOf
       |}
     """.stripMargin
   }
 
   def writeProperty(name: String, p: Property): String =
-    s"$name: ${writePropertyType(p)}"
+    s"${ident(name)}: ${writePropertyType(p)}"
 
   // TODO: Not exhaustive.
   // TODO: Incorrectly named: not returning a type when suffixing with '= None'.
@@ -214,6 +216,9 @@ object Main {
   def packageOf(fullyQualifiedName: String): String =
     fullyQualifiedName.split('.').init.mkString(".")
   
+  // Sanitise a fully qualified name.
+  def sanitiseFqn(s: String): String =
+    s.split('.').toList.map(ident).mkString(".")
 }
 
 object Scala {
