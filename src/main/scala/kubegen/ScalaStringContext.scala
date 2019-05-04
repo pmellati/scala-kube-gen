@@ -53,17 +53,57 @@ object ScalaCode {
   def concat(c1: ScalaCode, c2: ScalaCode): ScalaCode =
     ScalaCode(c1.fragments ++ c2.fragments, c1.imports ++ c2.imports)
   
-  def toLiteral(code: ScalaCode): String =
-    code.fragments.foldLeft("") { case (codeSoFar, fragment) => fragment match {
+  def toLiteral(code: ScalaCode): String = {
+
+    // TODO: Refactor and document this function.
+    def beautify(code: String): String = {
+      val lines = code.split("\n").toList
+
+      val firstNonWhitespaceLine = lines.find(_.matches(""".*\S+.*"""))
+
+      def numLeadingSpaces: List[Char] => Int = {
+        case ' '::rest =>
+          1 + numLeadingSpaces(rest)
+        case _ =>
+          0
+      }
+
+      val firstLineLeadingSpaces = firstNonWhitespaceLine.fold(ifEmpty = 0) {l =>
+        numLeadingSpaces(l.toList)
+      }
+
+      def deIndentLine(l: String, deIndentSize: Int): String = {
+        def deIndent(l: List[Char], deIndentSize: Int): List[Char] = (l, deIndentSize) match {
+          case (_, 0)         => l
+          case (Nil, _)       => Nil
+          case (' '::rest, _) => deIndent(rest, deIndentSize - 1)
+          case (_, _)         => l
+        }
+        
+        deIndent(l.toList, deIndentSize).mkString
+      }
+
+      lines.map(
+        deIndentLine(_, firstLineLeadingSpaces)
+      )
+        .mkString("\n")
+        .trim
+    }
+
+    val rawString = code.fragments.foldLeft("") { case (codeSoFar, fragment) => fragment match {
       case Text(text) =>
         codeSoFar + text
+
       case ImportsAnchor =>
-        val importStatements = code.imports.map { i =>
+        val importStatements = code.imports.toList.sorted.map { i =>
           s"import ${sanitiseFqn(i)}"
         }.mkString("\n")
 
         codeSoFar + importStatements
     }}
+
+    beautify(rawString)
+  }
 
   object syntax extends ScalaCodeSyntax
 }

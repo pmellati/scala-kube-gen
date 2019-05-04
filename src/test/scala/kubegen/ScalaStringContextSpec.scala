@@ -2,9 +2,8 @@ package kubegen
 
 import org.specs2.mutable.Specification
 
-import ScalaStringContext.ScalaStringContextImplicit
-import ScalaCode._
-import ScalaCode.syntax._
+import kubegen.ScalaStringContext.ScalaStringContextImplicit
+import kubegen.ScalaCode._, syntax._
 import kubegen.testing.ScalaCodeMatchers._
 
 class ScalaStringContextSpec extends Specification {
@@ -51,10 +50,18 @@ class ScalaStringContextSpec extends Specification {
 
       $varDecl
     """.withImports(
-      "other.import.one",
-      "other.import.two"
+      "other.import.foo",
+      "other.import.bar"
     )
 
-    code must beSameCodeAs("Hello world!")
+    code must beSameCodeAs("""
+      |package mypackage
+      |
+      |import io.`my-app`.models.Person
+      |import other.`import`.bar
+      |import other.`import`.foo
+      |
+      |val user: Person
+    """.stripMargin)
   }
 }
