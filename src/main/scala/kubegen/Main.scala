@@ -243,10 +243,6 @@ object Main {
   
   def packageOf(fullyQualifiedName: String): String =
     fullyQualifiedName.split('.').init.mkString(".")
-  
-  // Sanitise a fully qualified name.
-  def sanitiseFqn(s: String): String =
-    s.split('.').toList.map(ident).mkString(".")
 }
 
 object Scala {
@@ -257,6 +253,10 @@ object Scala {
   def ident(s: String): String =
     if(isValidIdent(s)) s
     else                s"`$s`"
+
+  /** Sanitise a fully qualified name. */
+  def sanitiseFqn(s: String): String =
+    s.split('.').toList.map(ident).mkString(".")
 
   /**
    * Class, object, variable & method names are called identifiers.

@@ -41,7 +41,7 @@ class ScalaStringContextSpec extends Specification {
   }
 
   "Can define imports" in {
-    val varType = "Person".id(`import` = "io.models.Person")
+    val varType = "Person".id.withImport("io.my-app.models.Person")
     val varDecl = scala"val user: $varType"
 
     val code = scala"""
@@ -50,7 +50,10 @@ class ScalaStringContextSpec extends Specification {
       $importsAnchor
 
       $varDecl
-    """
+    """.withImports(
+      "other.import.one",
+      "other.import.two"
+    )
 
     code must beSameCodeAs("Hello world!")
   }

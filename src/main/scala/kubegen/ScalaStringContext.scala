@@ -1,6 +1,6 @@
 package kubegen
 
-import Scala.ident
+import Scala.{ident, sanitiseFqn}
 import ScalaCode._
 
 object ScalaStringContext {
@@ -25,45 +25,45 @@ object ScalaStringContext {
   }
 }
 
-case class ScalaCode(fragments: List[Fragment])
+case class ScalaCode(fragments: List[Fragment], imports: Set[String]) {
+  def withImport(`import`: String): ScalaCode =
+    withImports(`import`)
+
+  def withImports(newImports: String*): ScalaCode =
+    copy(imports = imports ++ newImports)
+}
 
 object ScalaCode {
   trait Fragment
-  case class  Text(rendered: String, imports: Set[String]) extends Fragment 
-  case object ImportsAnchor                                extends Fragment  
+  case class  Text(rendered: String) extends Fragment 
+  case object ImportsAnchor          extends Fragment  
 
   def empty: ScalaCode =
-    ScalaCode(Nil)
+    ScalaCode(Nil, Set.empty)
   
   def literal(s: String): ScalaCode =
-    ScalaCode(List(Text(s, Set.empty)))
+    ScalaCode(List(Text(s)), Set.empty)
   
   def importsAnchor: ScalaCode =
-    ScalaCode(List(ImportsAnchor))
+    ScalaCode(List(ImportsAnchor), Set.empty)
 
   def flatten(codes: List[ScalaCode]): ScalaCode =
-    ScalaCode(codes.flatMap(_.fragments))
+    ScalaCode(codes.flatMap(_.fragments), codes.flatMap(_.imports).toSet)
 
   def concat(c1: ScalaCode, c2: ScalaCode): ScalaCode =
-    ScalaCode(c1.fragments ++ c2.fragments)
+    ScalaCode(c1.fragments ++ c2.fragments, c1.imports ++ c2.imports)
   
-  def toLiteral(code: ScalaCode): String = {
-    val imports = code.fragments.foldLeft[Set[String]](Set.empty) { case (imports, fragment) =>
-      fragment match {
-        case Text(_, newImports) =>
-          imports ++ newImports
-        case ImportsAnchor =>
-          imports
-      }
-    }
-
-    code.fragments.foldLeft("") {
-      case (codeSoFar, Text(text, _)) =>
+  def toLiteral(code: ScalaCode): String =
+    code.fragments.foldLeft("") { case (codeSoFar, fragment) => fragment match {
+      case Text(text) =>
         codeSoFar + text
-      case (codeSoFar, ImportsAnchor) =>
-        codeSoFar + "\n" + imports.mkString("\n")
-    }
-  }
+      case ImportsAnchor =>
+        val importStatements = code.imports.map { i =>
+          s"import ${sanitiseFqn(i)}"
+        }.mkString("\n")
+
+        codeSoFar + importStatements
+    }}
 
   object syntax extends ScalaCodeSyntax
 }
@@ -71,10 +71,7 @@ object ScalaCode {
 trait ScalaCodeSyntax {
   implicit class StringOps(s: String) {
     def id: ScalaCode =
-      ScalaCode(List(Text(ident(s), Set.empty)))
-    
-    def id(`import`: String) =
-      ScalaCode(List(Text(ident(s), Set(`import`))))
+      literal(ident(s))
 
     def lit: ScalaCode =
       literal(s)
