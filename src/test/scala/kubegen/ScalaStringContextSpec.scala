@@ -41,7 +41,8 @@ class ScalaStringContextSpec extends Specification {
   }
 
   "Can define imports" in {
-    val varDecl = scala"val user: Person".withImport("io.models.Person")
+    val varType = "Person".id(`import` = "io.models.Person")
+    val varDecl = scala"val user: $varType"
 
     val code = scala"""
       package mypackage

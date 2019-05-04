@@ -11,58 +11,73 @@ object ScalaStringContext {
 
       def combine(strings: List[String], codes: List[ScalaCode]): List[ScalaCode] = (strings, codes) match {
         case (s::ss, c::cs) =>
-          Literal(s) :: c :: combine(ss, cs)
+          literal(s) :: c :: combine(ss, cs)
         case (s::ss, Nil) =>
-          Literal(s) :: combine(ss, Nil)
+          literal(s) :: combine(ss, Nil)
         case (Nil, c::cs) =>
           c::cs
         case (Nil, Nil) =>
           Nil
       }
 
-      Composite(combine(strings, codes))
+      flatten(combine(strings, codes))
     }
   }
 }
 
-sealed trait ScalaCode
+case class ScalaCode(fragments: List[Fragment])
 
 object ScalaCode {
-  case class  Composite(fragments: List[ScalaCode]) extends ScalaCode
-  case class  Literal(code: String)                 extends ScalaCode
-  case class  Identifier(raw: String)               extends ScalaCode
-  case object ImportsAnchor                         extends ScalaCode 
+  trait Fragment
+  case class  Text(rendered: String, imports: Set[String]) extends Fragment 
+  case object ImportsAnchor                                extends Fragment  
 
   def empty: ScalaCode =
-    Composite(Nil)
+    ScalaCode(Nil)
+  
+  def literal(s: String): ScalaCode =
+    ScalaCode(List(Text(s, Set.empty)))
   
   def importsAnchor: ScalaCode =
-    ImportsAnchor
+    ScalaCode(List(ImportsAnchor))
 
-  def toLiteral(code: ScalaCode): String = code match {
-    case Literal(s) =>
-      s
-    case Identifier(raw) =>
-      ident(raw)
-    case Composite(fragments) =>
-      fragments.map(toLiteral).mkString
-    case ImportsAnchor =>
-      ???
-  }
+  def flatten(codes: List[ScalaCode]): ScalaCode =
+    ScalaCode(codes.flatMap(_.fragments))
 
   def concat(c1: ScalaCode, c2: ScalaCode): ScalaCode =
-    Composite(List(c1, c2))
+    ScalaCode(c1.fragments ++ c2.fragments)
+  
+  def toLiteral(code: ScalaCode): String = {
+    val imports = code.fragments.foldLeft[Set[String]](Set.empty) { case (imports, fragment) =>
+      fragment match {
+        case Text(_, newImports) =>
+          imports ++ newImports
+        case ImportsAnchor =>
+          imports
+      }
+    }
+
+    code.fragments.foldLeft("") {
+      case (codeSoFar, Text(text, _)) =>
+        codeSoFar + text
+      case (codeSoFar, ImportsAnchor) =>
+        codeSoFar + "\n" + imports.mkString("\n")
+    }
+  }
 
   object syntax extends ScalaCodeSyntax
 }
 
 trait ScalaCodeSyntax {
   implicit class StringOps(s: String) {
-    def id: Identifier =
-      Identifier(s)
+    def id: ScalaCode =
+      ScalaCode(List(Text(ident(s), Set.empty)))
     
-    def lit: Literal =
-      Literal(s)
+    def id(`import`: String) =
+      ScalaCode(List(Text(ident(s), Set(`import`))))
+
+    def lit: ScalaCode =
+      literal(s)
   }
 
   implicit class ScalaCodeOps(code: ScalaCode) {
