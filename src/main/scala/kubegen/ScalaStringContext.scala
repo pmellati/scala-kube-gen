@@ -110,11 +110,14 @@ object ScalaCode {
 
 trait ScalaCodeSyntax {
   implicit class StringOps(s: String) {
-    def id: ScalaCode =
-      literal(ident(s))
-
     def lit: ScalaCode =
       literal(s)
+
+    def id: ScalaCode =
+      literal(ident(s))
+    
+    def fqn: ScalaCode =
+      literal(sanitiseFqn(s))
   }
 
   implicit class ScalaCodeOps(code: ScalaCode) {

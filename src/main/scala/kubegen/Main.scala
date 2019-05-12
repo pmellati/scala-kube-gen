@@ -65,7 +65,7 @@ object Main {
       case "object" => 
         writeObjectModel(fullName, m)
       case "string" =>
-        writeStringModel(fullName)
+        writeStringModel(fullName).toLiteral
       case null =>
         println(s"WARN: model $fullName has type 'null'. Not implemented yet.")
         "// NULL model type - what do we need here?"
@@ -77,31 +77,31 @@ object Main {
 
   // TODO: The circe encoder and decoder are incorrect.
   /** Write a `Model` where `.getType` returns "string". We translate these as scala value classes. */
-  def writeStringModel(fullName: String): String = {
-    val packageNameSanitised = sanitiseFqn(packageOf(fullName))
-    val simpleNameSanitised  = ident(simpleNameOf(fullName))
+  def writeStringModel(fullName: String): ScalaCode = {
+    val packageName = packageOf(fullName).fqn
+    val simpleName  = simpleNameOf(fullName).lit
 
-    s"""
-      |package $packageNameSanitised
-      |
-      |import cats.effect.IO
-      |
-      |import org.http4s.{EntityDecoder, EntityEncoder}
-      |import org.http4s.circe._
-      |
-      |import io.circe.{Encoder, Decoder}
-      |import io.circe.generic.semiauto._
-      |
-      |case class $simpleNameSanitised(value: String) extends AnyVal
-      |
-      |object $simpleNameSanitised {
-      |  implicit val `io.k8s.apimachinery.pkg.apis.meta.v1.$simpleNameSanitised-Decoder`: Decoder[$simpleNameSanitised] = deriveDecoder
-      |  implicit val `io.k8s.apimachinery.pkg.apis.meta.v1.$simpleNameSanitised-Encoder`: Encoder[$simpleNameSanitised] = deriveEncoder
-      |
-      |  implicit val `io.k8s.apimachinery.pkg.apis.meta.v1.$simpleNameSanitised-EntityDecoder`: EntityDecoder[IO, $simpleNameSanitised] = jsonOf
-      |  implicit val `io.k8s.apimachinery.pkg.apis.meta.v1.$simpleNameSanitised-EntityEncoder`: EntityEncoder[IO, $simpleNameSanitised] = jsonEncoderOf
-      |}
-      |""".stripMargin
+    scala"""
+      package $packageName 
+      
+      import cats.effect.IO
+      
+      import org.http4s.{EntityDecoder, EntityEncoder}
+      import org.http4s.circe._
+      
+      import io.circe.{Encoder, Decoder}
+      import io.circe.generic.semiauto._
+      
+      case class $simpleName(value: String) extends AnyVal
+      
+      object $simpleName {
+        implicit val `io.k8s.apimachinery.pkg.apis.meta.v1.$simpleName-Decoder`: Decoder[$simpleName] = deriveDecoder
+        implicit val `io.k8s.apimachinery.pkg.apis.meta.v1.$simpleName-Encoder`: Encoder[$simpleName] = deriveEncoder
+      
+        implicit val `io.k8s.apimachinery.pkg.apis.meta.v1.$simpleName-EntityDecoder`: EntityDecoder[IO, $simpleName] = jsonOf
+        implicit val `io.k8s.apimachinery.pkg.apis.meta.v1.$simpleName-EntityEncoder`: EntityEncoder[IO, $simpleName] = jsonEncoderOf
+      }
+      """
   }
 
   /** Write a `Model` where `.getType` returns "object". */
