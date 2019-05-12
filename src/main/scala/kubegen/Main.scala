@@ -36,8 +36,8 @@ object Main {
     val outputProjectDir = Paths.get("/Users/pouria/src/sample-scala-client/src/main/scala/example")
 
     val writeModelFiles = definitions.toList.traverse { case (modelName, model) =>
-      val filePath: Path = outputProjectDir.resolve("models").resolve(s"$modelName.scala")
-      val fileContent: String = writeModel(modelName, model)
+      val filePath: Path      = outputProjectDir.resolve("models").resolve(s"$modelName.scala")
+      val fileContent: String = writeModel(modelName, model).toLiteral
       createFile(filePath, fileContent)
     }
 
@@ -57,7 +57,7 @@ object Main {
   }
 
   // TODO: Move all model translation code into separate object.
-  def writeModel(fullName: String, model: Model): String = {
+  def writeModel(fullName: String, model: Model): ScalaCode = {
     // The 'Model' interface lacks essential methods. So, cast to the only implementation.
     val m = model.asInstanceOf[ModelImpl]
 
@@ -65,11 +65,10 @@ object Main {
       case "object" => 
         writeObjectModel(fullName, m)
       case "string" =>
-        writeStringModel(fullName).toLiteral
+        writeStringModel(fullName)
       case null =>
         println(s"WARN: model $fullName has type 'null'. Not implemented yet.")
-        "// NULL model type - what do we need here?"
-        // throw new NotImplementedError(s"Model type: NULL\nModel name: $fullName")
+        scala"// NULL model type - what do we need here?"
       case other =>
         throw new NotImplementedError(s"Model type: $other\nModel name: $fullName")
     }
@@ -105,9 +104,9 @@ object Main {
   }
 
   /** Write a `Model` where `.getType` returns "object". */
-  def writeObjectModel(fullName: String, m: Model): String = {
-    val packageName         = fullName.split('.').init.mkString(".")
-    val simpleNameSanitised = ident(fullName.split('.').last)
+  def writeObjectModel(fullName: String, m: Model): ScalaCode = {
+    val packageName = fullName.split('.').init.mkString(".")
+    val simpleName  = fullName.split('.').last.id
 
     val properties: Map[String, Property] = Option(m.getProperties) match {
       case None => 
@@ -118,76 +117,70 @@ object Main {
         javaMap.asScala.toMap
     }
 
+    val fields: ScalaCode = properties.map { case (name, prop) =>
+      writeProperty(name, prop)
+    }.mkScala(",\n  ".lit)
 
-    val fieldsScalaCode = properties.map { case (name, prop) =>
-      s"${writeProperty(name, prop)}"
-    }.mkString(",\n  ")
-
-    val modelImports = properties.values.toList.collect {
-      case p: RefProperty if packageOf(p.getSimpleRef) != packageName =>
-        s"import ${p.getSimpleRef}"
-    }.toSet.mkString("\n")
-
-    s"""
-      |package ${sanitiseFqn(packageName)}
-      |
-      |$modelImports
-      |
-      |import cats.effect.IO
-      |
-      |import org.http4s.{EntityDecoder, EntityEncoder}
-      |import org.http4s.circe._
-      |
-      |import io.circe.{Encoder, Decoder}
-      |import io.circe.generic.semiauto._
-      |
-      |case class $simpleNameSanitised(
-      |  $fieldsScalaCode
-      |)
-      |
-      |object $simpleNameSanitised {
-      |  implicit val `${fullName}-Decoder`: Decoder[$simpleNameSanitised] = deriveDecoder
-      |  implicit val `${fullName}-Encoder`: Encoder[$simpleNameSanitised] = deriveEncoder
-      |
-      |  implicit val `${fullName}-EntityDecoder`: EntityDecoder[IO, $simpleNameSanitised] = jsonOf
-      |  implicit val `${fullName}-EntityEncoder`: EntityEncoder[IO, $simpleNameSanitised] = jsonEncoderOf
-      |}
-    """.stripMargin
+    scala"""
+      package ${packageName.fqn}
+      
+      $importsAnchor
+      
+      import cats.effect.IO
+      
+      import org.http4s.{EntityDecoder, EntityEncoder}
+      import org.http4s.circe._
+      
+      import io.circe.{Encoder, Decoder}
+      import io.circe.generic.semiauto._
+      
+      case class $simpleName(
+        $fields
+      )
+      
+      object $simpleName {
+        implicit val `${fullName.lit}-Decoder`: Decoder[$simpleName] = deriveDecoder
+        implicit val `${fullName.lit}-Encoder`: Encoder[$simpleName] = deriveEncoder
+      
+        implicit val `${fullName.lit}-EntityDecoder`: EntityDecoder[IO, $simpleName] = jsonOf
+        implicit val `${fullName.lit}-EntityEncoder`: EntityEncoder[IO, $simpleName] = jsonEncoderOf
+      }
+    """
   }
 
-  def writeProperty(name: String, p: Property): String =
-    s"${ident(name)}: ${writePropertyType(p)}"
+  def writeProperty(name: String, p: Property): ScalaCode =
+    scala"${name.id}: ${writePropertyType(p)}"
 
   // TODO: Not exhaustive.
   // TODO: Incorrectly named: not returning a type when suffixing with '= None'.
-  def writePropertyType(p: Property, optionisationIsEnabled: Boolean = true): String = {
-    val typeWithoutOptionisation = p match {
+  def writePropertyType(p: Property, optionisationIsEnabled: Boolean = true): ScalaCode = {
+    val typeWithoutOptionisation: ScalaCode = p match {
       case _: StringProperty =>
-        "String"
+        "String".id
       case _: IntegerProperty =>
-        "Int"
+        "Int".id
       case _: LongProperty =>
-        "Long"
+        "Long".id
       case _: DoubleProperty =>
-        "Double"
+        "Double".id
       case _: BooleanProperty =>
-        "Boolean"
+        "Boolean".id
       case p: RefProperty =>
-        val fullyQualifiedName = p.getOriginalRef
+        val fullyQualifiedName = p.getSimpleRef
         // TODO: import the other class.
-        simpleNameOf(fullyQualifiedName)
+        simpleNameOf(fullyQualifiedName).id.withImport(fullyQualifiedName)
       case p: ArrayProperty => 
         val elementType = writePropertyType(p.getItems, optionisationIsEnabled = false)
-        s"List[$elementType]"
+        scala"List[$elementType]"
       case p: MapProperty =>
         val valueType = writePropertyType(p.getAdditionalProperties, optionisationIsEnabled = false)
-        s"Map[String, $valueType]"  // Note: Key type is always string in an open-api map.
+        scala"Map[String, $valueType]"  // Note: Key type is always string in an open-api map.
       case p =>
         throw new NotImplementedError(s"Property of class: ${p.getClass}")
     }
 
     if(optionisationIsEnabled && !p.getRequired)
-      s"Option[$typeWithoutOptionisation] = None"
+      scala"Option[$typeWithoutOptionisation] = None"
     else
       typeWithoutOptionisation
   }
