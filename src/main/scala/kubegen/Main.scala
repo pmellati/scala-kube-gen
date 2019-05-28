@@ -18,22 +18,19 @@ import kubegen.Scala._
 object Main {
   def main(args: Array[String]) {
     val swagger = new SwaggerParser().read("/Users/pouria/Documents/kube-openapi-spec.json")
-    val nodeStatusPath = swagger.getPath("/api/v1/nodes/{name}/status")
-    val getNodeStatus = nodeStatusPath.getGet
-
-    // println("=====================================")
-    // println(writeOperation(swagger, getNodeStatus))
-    // println("=====================================")
-
-    val definitions   = swagger.getDefinitions.asScala.toMap
-    val nodeModelName = "io.k8s.api.core.v1.Node"
-    val nodeModel     = definitions(nodeModelName)
-
-    // println("=====================================")
-    // println(writeModel(nodeModelName, nodeModel))
-    // println("=====================================")
 
     val outputProjectDir = Paths.get("/Users/pouria/src/sample-scala-client/src/main/scala/example")
+
+    val nodeStatusPath         = swagger.getPath("/api/v1/nodes/{name}/status")
+    val getNodeStatusOperation = nodeStatusPath.getGet
+    val getNodeStOperationFilePath = outputProjectDir.resolve("apis").resolve(s"${getNodeStatusOperation.getOperationId}.scala")
+
+    createFile(
+      getNodeStOperationFilePath,
+      writeOperation("/api/v1/nodes/{name}/status", HttpMethod.GET, getNodeStatusOperation).toLiteral
+    ).unsafeRunSync()
+
+    val definitions   = swagger.getDefinitions.asScala.toMap
 
     val writeModelFiles = definitions.toList.traverse { case (modelName, model) =>
       val filePath: Path      = outputProjectDir.resolve("models").resolve(s"$modelName.scala")
@@ -41,7 +38,7 @@ object Main {
       createFile(filePath, fileContent)
     }
 
-    writeModelFiles.unsafeRunSync()
+    // writeModelFiles.unsafeRunSync()
   }
 
   // TODO: Use a better library for file system operations.
@@ -54,6 +51,88 @@ object Main {
     val writer = new PrintWriter(file)
     writer.write(text)
     writer.close()
+  }
+
+  def writeOperation(path: String, httpMethod: HttpMethod, op: Operation): ScalaCode = {
+    // TODO: Handle all responses.
+    // TODO: Remove parentheses if there are no args.
+    // TODO: What if no 200 response?
+
+    val params = op.getParameters.asScala.toList
+
+    val responses = op.getResponses.asScala.toMap
+
+    val okResponse  = responses("200")
+    val okResultRef = okResponse.getResponseSchema.getReference    
+    val okResultFqn = okResultRef.split('/').last    // Assuming the ref is like: #/definitions/io.k8s.api.core.v1.Node
+
+    val okResultSimpleNameWithImport = simpleNameOf(okResultFqn).id.withImport(okResultFqn)
+
+    val paramsDeclScala: ScalaCode =
+      if(params.isEmpty)
+        scala""
+      else
+        scala"(httpClient: Client[IO], baseApiUri: Uri, ${params.map(writeParam).mkScala(", ".lit)})"
+    
+    val pathWithScalaStrInterpolation = "s\"\"\"" + path.replaceAllLiterally("{", "${") + "\"\"\""
+
+    val uriQueryParamsAdditionCode: ScalaCode = params.collect {
+      case p: QueryParameter =>
+        if(p.getRequired)
+          scala""".withQueryParam("${p.getName.lit}", ${p.getName.id})"""
+        else
+          scala""".withOptionQueryParam("${p.getName.lit}", ${p.getName.id})"""
+    }.mkScala(scala"\n")
+
+    scala"""
+      package myapi
+
+      import cats.effect.IO
+
+      import org.http4s._, client.Client
+
+      $importsAnchor
+
+      object OneOffOperation {
+        def ${op.getOperationId.id}$paramsDeclScala: IO[${okResultSimpleNameWithImport}] = {
+          val path = ${pathWithScalaStrInterpolation.lit}
+          val uri  = baseApiUri.withPath(path) 
+
+          val uriWithQueryParams = uri
+          $uriQueryParamsAdditionCode
+
+          val method = Method.${httpMethod.toString.lit}
+
+          val request = Request[IO](
+            method = method,
+            uri = uriWithQueryParams
+          )
+      
+          httpClient.expect[Node](request)
+        }
+      }
+    """
+  }
+
+  // TODO: Handle default values.
+  def writeParam(p: Parameter): ScalaCode = {
+    def paramType(swaggerType: String): ScalaCode =
+      if(p.getRequired) writeType(swaggerType)
+      else              scala"Option[${writeType(swaggerType)}] = None"
+
+    p match {
+      case p: PathParameter =>
+        scala"${p.getName.id}: ${paramType(p.getType)}"
+      case p: QueryParameter =>
+        scala"${p.getName.id}: ${paramType(p.getType)}"
+      case p =>
+        throw new NotImplementedError(s"Param: $p")
+    }
+  }
+
+  // TODO: May be completely misunderstood.
+  def writeType: String => ScalaCode = {
+    case "string" => "String".lit
   }
 
   // TODO: Move all model translation code into separate object.
@@ -123,6 +202,7 @@ object Main {
     val properties: Map[String, Property] = Option(m.getProperties) match {
       case None => 
         // TODO: Use a logging lib.
+        // TODO: Write a thin json wrapper instead.
         println(s"WARN: properties of 'object' model $fullName is 'null'. Empty case class will be generated.")
         Map.empty
       case Some(javaMap) =>
@@ -197,54 +277,6 @@ object Main {
       scala"Option[$typeWithoutOptionisation] = None"
     else
       typeWithoutOptionisation
-  }
-
-  def writeOperation(swagger: Swagger, op: Operation): String = {
-    // TODO: Handle all responses.
-    // TODO: Remove parentheses if there are no args.
-    // TODO: What if no 200 response?
-
-    val params = op.getParameters.asScala.toList
-
-    val responses = op.getResponses.asScala.toMap
-
-    val okResponse    = responses("200")
-    val okResultRef   = okResponse.getResponseSchema.getReference    
-    val okResultDefId = okResultRef.split('/').last    // Assuming the ref is like: #/definitions/io.k8s.api.core.v1.Node
-
-    val paramsDeclScala =
-      if(params.isEmpty)
-        ""
-      else
-        params.map(writeParam).mkString("(", ", ", ")")
-
-    s"""
-      def ${op.getOperationId}$paramsDeclScala: IO[$okResultDefId] = {
-
-        wooow!
-      }
-    """
-  }
-
-  // TODO: Handle default values.
-  def writeParam(p: Parameter): String = {
-    def paramType(swaggerType: String) =
-      if(p.getRequired) writeType(swaggerType)
-      else              s"Option[${writeType(swaggerType)}] = None"
-
-    p match {
-      case p: PathParameter =>
-        s"${p.getName}: ${paramType(p.getType)}"
-      case p: QueryParameter =>
-        s"${p.getName}: ${paramType(p.getType)}"
-      case p =>
-        throw new NotImplementedError(s"Param: $p")
-    }
-  }
-
-  // TODO: May be completely misunderstood.
-  def writeType: String => String = {
-    case "string" => "String"
   }
 
   def simpleNameOf(fullyQualifiedName: String): String =
