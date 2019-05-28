@@ -65,42 +65,54 @@ object Main {
       case "object" => 
         writeObjectModel(fullName, m)
       case "string" =>
-        writeStringModel(fullName)
+        println(s"WARN: model $fullName has type 'string'. Generating thin json wrapper.")
+        // TODO: For more user convenience, write a value class wrapping a String
+        writeThinJsonWrapperModel(fullName) 
       case null =>
-        println(s"WARN: model $fullName has type 'null'. Not implemented yet.")
-        scala"// NULL model type - what do we need here?"
+        println(s"WARN: model $fullName has type 'null'. Generating thin json wrapper.")
+        writeThinJsonWrapperModel(fullName)
       case other =>
         throw new NotImplementedError(s"Model type: $other\nModel name: $fullName")
     }
   }
 
-  // TODO: The circe encoder and decoder are incorrect.
-  /** Write a `Model` where `.getType` returns "string". We translate these as scala value classes. */
-  def writeStringModel(fullName: String): ScalaCode = {
+  /** Write a `Model` as a thin wrapper around a json value, because either the OpenAPI spec
+   *  has provided an empty definition for this model, or we don't know how translate this
+   *  type of model yet. */
+  def writeThinJsonWrapperModel(fullName: String): ScalaCode = {
     val packageName = packageOf(fullName).fqn
-    val simpleName  = simpleNameOf(fullName).lit
+    val simpleName  = simpleNameOf(fullName).id
 
     scala"""
-      package $packageName 
-      
+      package $packageName
+
       import cats.effect.IO
       
       import org.http4s.{EntityDecoder, EntityEncoder}
       import org.http4s.circe._
       
-      import io.circe.{Encoder, Decoder}
+      import io.circe.{Decoder, Encoder, Json}, Decoder.decodeJson, Encoder.encodeJson
       import io.circe.generic.semiauto._
       
-      case class $simpleName(value: String) extends AnyVal
+      /**
+       * The OpenAPI specification based on which this file was generated did not contain a definition
+       * for this class. Therefore, we simply define the class as a thin wrapper around a json value.
+       */
+      case class $simpleName(
+        json: Json
+      )
       
       object $simpleName {
-        implicit val `io.k8s.apimachinery.pkg.apis.meta.v1.$simpleName-Decoder`: Decoder[$simpleName] = deriveDecoder
-        implicit val `io.k8s.apimachinery.pkg.apis.meta.v1.$simpleName-Encoder`: Encoder[$simpleName] = deriveEncoder
+        implicit val `${fullName.lit}-Decoder`: Decoder[$simpleName] =
+          decodeJson.map(json => $simpleName(json))
+          
+        implicit val `${fullName.lit}-Encoder`: Encoder[$simpleName] =
+          encodeJson.contramap[$simpleName](_.json)
       
-        implicit val `io.k8s.apimachinery.pkg.apis.meta.v1.$simpleName-EntityDecoder`: EntityDecoder[IO, $simpleName] = jsonOf
-        implicit val `io.k8s.apimachinery.pkg.apis.meta.v1.$simpleName-EntityEncoder`: EntityEncoder[IO, $simpleName] = jsonEncoderOf
+        implicit val `${fullName.lit}-EntityDecoder`: EntityDecoder[IO, $simpleName] = jsonOf
+        implicit val `${fullName.lit}-EntityEncoder`: EntityEncoder[IO, $simpleName] = jsonEncoderOf
       }
-      """
+    """
   }
 
   /** Write a `Model` where `.getType` returns "object". */
