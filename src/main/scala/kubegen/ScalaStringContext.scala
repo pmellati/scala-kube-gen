@@ -31,6 +31,9 @@ case class ScalaCode(fragments: List[Fragment], imports: Set[String]) {
 
   def withImports(newImports: String*): ScalaCode =
     copy(imports = imports ++ newImports)
+
+  def filterImports(filter: String => Boolean): ScalaCode =
+    copy(imports = imports.filter(filter))
 }
 
 object ScalaCode {

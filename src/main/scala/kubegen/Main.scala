@@ -117,8 +117,8 @@ object Main {
 
   /** Write a `Model` where `.getType` returns "object". */
   def writeObjectModel(fullName: String, m: Model): ScalaCode = {
-    val packageName = fullName.split('.').init.mkString(".")
-    val simpleName  = fullName.split('.').last.id
+    val packageName = packageOf(fullName)
+    val simpleName  = simpleNameOf(fullName).id
 
     val properties: Map[String, Property] = Option(m.getProperties) match {
       case None => 
@@ -157,7 +157,9 @@ object Main {
         implicit val `${fullName.lit}-EntityDecoder`: EntityDecoder[IO, $simpleName] = jsonOf
         implicit val `${fullName.lit}-EntityEncoder`: EntityEncoder[IO, $simpleName] = jsonEncoderOf
       }
-    """
+    """.filterImports(
+      packageOf(_) != packageName
+    )
   }
 
   def writeProperty(name: String, p: Property): ScalaCode =
