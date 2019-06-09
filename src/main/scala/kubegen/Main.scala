@@ -53,6 +53,32 @@ object Main {
     writer.close()
   }
 
+  // TODO: find a better name for this.
+  case class OperationWithMeta(operation: Operation, path: String, method: HttpMethod)
+  type OperationTag = String
+
+  def operationsByTag(swagger: Swagger): Map[OperationTag, List[OperationWithMeta]] = {
+    val operationByTag = for {
+      pathAndDesc     <- swagger.getPaths.asScala.toSeq
+      (path, pathDesc) = pathAndDesc 
+      methodAndOp     <- pathDesc.getOperationMap.asScala.toSeq
+      (httpMethod, op) = methodAndOp
+      _                = if(op.getTags.size != 1)
+                           throw new NotImplementedError(
+                             s"Each operation is expected to have exactly 1 tag. " +
+                             s"Operation ${op.getOperationId} has ${op.getTags.size}.")
+      tag             <- op.getTags.asScala.toSeq
+      opWithMeta       = OperationWithMeta(op, path, httpMethod)
+    } yield (tag, opWithMeta)
+
+    operationByTag.groupBy { case (tag, _) =>
+      tag
+    }.mapValues(_.toList.map { case (_, op) =>
+      op
+    })
+  }
+
+
   def writeOperation(path: String, httpMethod: HttpMethod, op: Operation): ScalaCode = {
     // TODO: Handle all responses.
     // TODO: Remove parentheses if there are no args.
