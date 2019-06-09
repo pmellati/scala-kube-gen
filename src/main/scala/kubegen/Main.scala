@@ -21,13 +21,32 @@ object Main {
 
     val outputProjectDir = Paths.get("/Users/pouria/src/sample-scala-client/src/main/scala/example")
 
-    val nodeStatusPath         = swagger.getPath("/api/v1/nodes/{name}/status")
-    val getNodeStatusOperation = nodeStatusPath.getGet
-    val getNodeStOperationFilePath = outputProjectDir.resolve("apis").resolve(s"${getNodeStatusOperation.getOperationId}.scala")
+    // val nodeStatusPath         = swagger.getPath("/api/v1/nodes/{name}/status")
+    // val getNodeStatusOperation = nodeStatusPath.getGet
+    // val getNodeStOperationFilePath = outputProjectDir.resolve("apis").resolve(s"${getNodeStatusOperation.getOperationId}.scala")
 
+    // createFile(
+    //   getNodeStOperationFilePath,
+    //   writeOperation("/api/v1/nodes/{name}/status", HttpMethod.GET, getNodeStatusOperation).toLiteral
+    // ).unsafeRunSync()
+
+    val opsByTag = operationsByTag(swagger)
+
+    val createApiFiles = opsByTag.toList.traverse { case (apiTag, ops) =>
+      val filePath = outputProjectDir.resolve("apis").resolve(s"${toApiObjectName(apiTag)}.scala")
+      val fileContent = writeApiFile(apiTag, ops).toLiteral
+
+      createFile(filePath, fileContent)
+    }
+
+    createApiFiles.unsafeRunSync()
+
+    val apiTag = "core_v1"
+    val nodeApiOps = opsByTag(apiTag)
+    val nodeApiFilePath = outputProjectDir.resolve("apis").resolve(s"${toApiObjectName(apiTag)}.scala")
     createFile(
-      getNodeStOperationFilePath,
-      writeOperation("/api/v1/nodes/{name}/status", HttpMethod.GET, getNodeStatusOperation).toLiteral
+      nodeApiFilePath,
+      writeApiFile(apiTag, nodeApiOps).toLiteral
     ).unsafeRunSync()
 
     val definitions   = swagger.getDefinitions.asScala.toMap
@@ -78,37 +97,22 @@ object Main {
     })
   }
 
-
-  def writeOperation(path: String, httpMethod: HttpMethod, op: Operation): ScalaCode = {
-    // TODO: Handle all responses.
-    // TODO: Remove parentheses if there are no args.
-    // TODO: What if no 200 response?
-
-    val params = op.getParameters.asScala.toList
-
-    val responses = op.getResponses.asScala.toMap
-
-    val okResponse  = responses("200")
-    val okResultRef = okResponse.getResponseSchema.getReference    
-    val okResultFqn = okResultRef.split('/').last    // Assuming the ref is like: #/definitions/io.k8s.api.core.v1.Node
-
-    val okResultSimpleNameWithImport = simpleNameOf(okResultFqn).id.withImport(okResultFqn)
-
-    val paramsDeclScala: ScalaCode =
-      if(params.isEmpty)
-        scala""
-      else
-        scala"(httpClient: Client[IO], baseApiUri: Uri, ${params.map(writeParam).mkScala(", ".lit)})"
+  def toApiObjectName(tag: OperationTag): String = {
+    def capitaliseFirstChar(s: String) =
+      s.headOption.fold(ifEmpty = "") { head =>
+        head.toString.capitalize + s.tail
+      }
     
-    val pathWithScalaStrInterpolation = "s\"\"\"" + path.replaceAllLiterally("{", "${") + "\"\"\""
+    def underscoresToPascalCase(s: String) =
+      s.split("_").map(capitaliseFirstChar).mkString
+    
+    s"${underscoresToPascalCase(tag)}Api"
+  }
 
-    val uriQueryParamsAdditionCode: ScalaCode = params.collect {
-      case p: QueryParameter =>
-        if(p.getRequired)
-          scala""".withQueryParam("${p.getName.lit}", ${p.getName.id})"""
-        else
-          scala""".withOptionQueryParam("${p.getName.lit}", ${p.getName.id})"""
-    }.mkScala(scala"\n")
+  def writeApiFile(tag: OperationTag, operations: List[OperationWithMeta]): ScalaCode = {
+    val functions = operations.map(writeOperation).mkScala("\n".lit)
+
+    val apiObjectName = toApiObjectName(tag).id
 
     scala"""
       package myapi
@@ -119,38 +123,125 @@ object Main {
 
       $importsAnchor
 
-      object OneOffOperation {
-        def ${op.getOperationId.id}$paramsDeclScala: IO[${okResultSimpleNameWithImport}] = {
-          val path = ${pathWithScalaStrInterpolation.lit}
-          val uri  = baseApiUri.withPath(path) 
-
-          val uriWithQueryParams = uri
-          $uriQueryParamsAdditionCode
-
-          val method = Method.${httpMethod.toString.lit}
-
-          val request = Request[IO](
-            method = method,
-            uri = uriWithQueryParams
-          )
-      
-          httpClient.expect[Node](request)
-        }
+      object $apiObjectName {
+        $functions
       }
     """
   }
 
-  // TODO: Handle default values.
-  def writeParam(p: Parameter): ScalaCode = {
+  /** Between different types of swagger params, like path, query and body params, the swagger
+   *  spec may use duplicate names. A ParamRenaming maps each param to a unique name.
+   */
+  type ParamRenaming = Parameter => String
+
+  def writeOperation(opWithMeta: OperationWithMeta): ScalaCode = {
+    val op = opWithMeta.operation
+
+    val params = op.getParameters.asScala.toList
+
+    val responses = op.getResponses.asScala.toMap
+
+    // TODO: Should be handled better.
+    val okResultType = responses.get("200") match {
+      case Some(response) =>
+        writeModelType(response.getResponseSchema)    
+      case None =>
+        println(s"WARN: Operation ${op.getOperationId} does not have a 200 response. Defaulting to response type 'Unit'.")
+        scala"Unit"
+    }
+
+    // Extremely naive renaming that will try to rename query parameters that have the same
+    // name as path parameters.
+    val paramRenaming: ParamRenaming = {
+      val pathParamNames = params.collect {
+        case p: PathParameter => p.getName
+      }.toSet
+
+      (p: Parameter) => p match {
+        case p: QueryParameter if pathParamNames.contains(p.getName) =>
+          s"${p.getName}_2"
+        case _ =>
+          p.getName
+      }
+    }
+
+    val paramsDeclScala: ScalaCode = {
+      val auxiliaryParams = scala"httpClient: Client[IO], baseApiUri: Uri"
+
+      if(params.isEmpty)
+        scala"($auxiliaryParams)"
+      else
+        scala"($auxiliaryParams, ${params.map(p => writeParam(p, paramRenaming)).mkScala(", ".lit)})"
+    }
+    
+    val pathWithScalaStrInterpolation = "s\"\"\"" + opWithMeta.path.replaceAllLiterally("{", "${") + "\"\"\""
+
+    val uriQueryParamsAdditionCode: ScalaCode = params.collect {
+      case p: QueryParameter =>
+        if(p.getRequired)
+          scala""".withQueryParam("${p.getName.lit}", ${paramRenaming(p).id})"""
+        else
+          scala""".withOptionQueryParam("${p.getName.lit}", ${paramRenaming(p).id})"""
+    }.mkScala("\n".lit)
+
+    scala"""
+        /** ${op.getDescription.lit} */
+        def ${op.getOperationId.id}$paramsDeclScala: IO[$okResultType] = {
+          val _path = ${pathWithScalaStrInterpolation.lit}
+          val _uri  = baseApiUri.withPath(_path) 
+
+          val _uriWithQueryParams = _uri
+          $uriQueryParamsAdditionCode
+
+          val _method = Method.${opWithMeta.method.toString.lit}
+
+          val _request = Request[IO](
+            method = _method,
+            uri = _uriWithQueryParams
+          )
+      
+          httpClient.expect[$okResultType](_request)
+        }
+    """
+  }
+
+  // TODO: Needs a better name and documentation.
+  // Write a type that refers to the model, rather than a definition of the model.
+  def writeModelType(model: Model): ScalaCode = model match {
+    case model: RefModel =>
+      val fqn = modelRefToSimpleRef(model.getReference)
+
+      simpleNameOf(fqn).id.withImport(fqn)
+    case model: ModelImpl =>
+      model.getType match {
+        case "string" => "String".lit
+        case unsupported =>
+          throw new NotImplementedError(s"Cannot write a type for ModelImpl with type: $unsupported")
+      }
+    case _ =>
+      throw new NotImplementedError(s"Cannot write a type for model: $model")
+  }
+
+  
+  /** Turns a ref like "#/definitions/io.k8s.api.core.v1.Node" into "io.k8s.api.core.v1.Node". */
+  def modelRefToSimpleRef(ref: String): String = {
+    ref.split('/').last
+  }
+
+  def writeParam(p: Parameter, renamed: ParamRenaming): ScalaCode = {
     def paramType(swaggerType: String): ScalaCode =
       if(p.getRequired) writeType(swaggerType)
       else              scala"Option[${writeType(swaggerType)}] = None"
 
     p match {
       case p: PathParameter =>
-        scala"${p.getName.id}: ${paramType(p.getType)}"
+        scala"${renamed(p).id}: ${paramType(p.getType)}"
       case p: QueryParameter =>
-        scala"${p.getName.id}: ${paramType(p.getType)}"
+        scala"${renamed(p).id}: ${paramType(p.getType)}"
+      case p: BodyParameter =>
+        val paramType = writeModelType(p.getSchema)
+
+        scala"${renamed(p).id}: $paramType"
       case p =>
         throw new NotImplementedError(s"Param: $p")
     }
@@ -159,8 +250,13 @@ object Main {
   // TODO: May be completely misunderstood.
   def writeType: String => ScalaCode = {
     case "string" => "String".lit
+    case "boolean" => "Boolean".lit
+    case "integer" => "Int".lit
+    case unsupported =>
+      throw new NotImplementedError(s"Unsupported API call param type: $unsupported")
   }
 
+  // TODO: Rename to: 'writeModelDefinition'
   // TODO: Move all model translation code into separate object.
   def writeModel(fullName: String, model: Model): ScalaCode = {
     // The 'Model' interface lacks essential methods. So, cast to the only implementation.
