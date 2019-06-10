@@ -184,6 +184,16 @@ object Main {
           scala""".withOptionQueryParam("${p.getName.lit}", ${paramRenaming(p).id})"""
     }.mkScala("\n".lit)
 
+    val bodyParam = params.collectFirst {
+      case param: BodyParameter => param
+    }
+    
+    val addOptionalBody = bodyParam.fold(ifEmpty = scala"") { bodyParam =>
+      val paramName = paramRenaming(bodyParam).id
+
+      scala".withEntity($paramName)"
+    }
+
     scala"""
         /** ${op.getDescription.lit} */
         def ${op.getOperationId.id}$paramsDeclScala: IO[$okResultType] = {
@@ -198,7 +208,7 @@ object Main {
           val _request = Request[IO](
             method = _method,
             uri = _uriWithQueryParams
-          )
+          )$addOptionalBody
       
           httpClient.expect[$okResultType](_request)
         }
