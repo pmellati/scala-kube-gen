@@ -194,8 +194,19 @@ object Main {
       scala".withEntity($paramName)"
     }
 
+    val paramsScaladocs = params.map { p =>
+      scala"*  @param ${paramRenaming(p).id} ${p.getDescription.lit}"
+    }.mkScala("\n".lit)
+
+    val scaladocs = scala"""
+      /** ${op.getDescription.lit}
+       * 
+       $paramsScaladocs
+       */
+    """
+
     scala"""
-        /** ${op.getDescription.lit} */
+        $scaladocs
         def ${op.getOperationId.id}$paramsDeclScala: IO[$okResultType] = {
           val _path = ${pathWithScalaStrInterpolation.lit}
           val _uri  = baseApiUri.withPath(_path) 
