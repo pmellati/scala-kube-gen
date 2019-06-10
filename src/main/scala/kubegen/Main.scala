@@ -117,8 +117,6 @@ object Main {
     scala"""
       package myapi
 
-      import cats.effect.IO
-
       import org.http4s._, client.Client
 
       $importsAnchor
@@ -165,14 +163,34 @@ object Main {
       }
     }
 
-    val paramsDeclScala: ScalaCode = {
-      val auxiliaryParams = scala"httpClient: Client[IO], baseApiUri: Uri"
+    val bodyParam = params.collectFirst {
+      case param: BodyParameter => param
+    }
+
+    val explicitParamsDecl: ScalaCode = {
+      val auxiliaryParams = scala"httpClient: Client[F], baseApiUri: Uri"
 
       if(params.isEmpty)
         scala"($auxiliaryParams)"
       else
         scala"($auxiliaryParams, ${params.map(p => writeParam(p, paramRenaming)).mkScala(", ".lit)})"
     }
+
+    val implicitParamsDecl: ScalaCode = {
+      val bodyEncoderParam =
+        bodyParam.map { bodyParam =>
+          val bodyParamType = writeParamType(bodyParam, optionisationIsEnabled = false)
+          scala"bodyEncoder: EntityEncoder[F, $bodyParamType]"
+        }
+      
+      val responseDecoderParam = scala"respDecoder: EntityDecoder[F, $okResultType]"
+
+      val params = (responseDecoderParam :: bodyEncoderParam.toList).mkScala(", ".lit)
+
+      scala"""(implicit $params)"""
+    }
+
+    val paramsDecl = scala"${explicitParamsDecl}${implicitParamsDecl}"
     
     val pathWithScalaStrInterpolation = "s\"\"\"" + opWithMeta.path.replaceAllLiterally("{", "${") + "\"\"\""
 
@@ -183,10 +201,6 @@ object Main {
         else
           scala""".withOptionQueryParam("${p.getName.lit}", ${paramRenaming(p).id})"""
     }.mkScala("\n".lit)
-
-    val bodyParam = params.collectFirst {
-      case param: BodyParameter => param
-    }
     
     val addOptionalBody = bodyParam.fold(ifEmpty = scala"") { bodyParam =>
       val paramName = paramRenaming(bodyParam).id
@@ -207,7 +221,7 @@ object Main {
 
     scala"""
         $scaladocs
-        def ${op.getOperationId.id}$paramsDeclScala: IO[$okResultType] = {
+        def ${op.getOperationId.id}[F[_]]$paramsDecl: F[$okResultType] = {
           val _path = ${pathWithScalaStrInterpolation.lit}
           val _uri  = baseApiUri.withPath(_path) 
 
@@ -216,7 +230,7 @@ object Main {
 
           val _method = Method.${opWithMeta.method.toString.lit}
 
-          val _request = Request[IO](
+          val _request = Request[F](
             method = _method,
             uri = _uriWithQueryParams
           )$addOptionalBody
@@ -249,23 +263,31 @@ object Main {
     ref.split('/').last
   }
 
-  def writeParam(p: Parameter, renamed: ParamRenaming): ScalaCode = {
-    def paramType(swaggerType: String): ScalaCode =
-      if(p.getRequired) writeType(swaggerType)
-      else              scala"Option[${writeType(swaggerType)}] = None"
-
-    p match {
+  def writeParamType(p: Parameter, optionisationIsEnabled: Boolean = true): ScalaCode = {
+    val typeWithoutOptionisation: ScalaCode = p match {
       case p: PathParameter =>
-        scala"${renamed(p).id}: ${paramType(p.getType)}"
+        scala"${writeType(p.getType)}"
       case p: QueryParameter =>
-        scala"${renamed(p).id}: ${paramType(p.getType)}"
+        scala"${writeType(p.getType)}"
       case p: BodyParameter =>
-        val paramType = writeModelType(p.getSchema)
-
-        scala"${renamed(p).id}: $paramType"
+        writeModelType(p.getSchema)
       case p =>
-        throw new NotImplementedError(s"Param: $p")
+        throw new NotImplementedError(s"Type of param: $p")
     }
+
+    if(optionisationIsEnabled && !p.getRequired)
+      scala"Option[$typeWithoutOptionisation]"
+    else
+      typeWithoutOptionisation
+  }
+
+  def writeParam(p: Parameter, renamed: ParamRenaming): ScalaCode = {
+    val noneAsDefaultVal = if(p.getRequired)
+      scala""
+    else           
+      scala" = None"
+
+    scala"${renamed(p).id}: ${writeParamType(p)}$noneAsDefaultVal"
   }
 
   // TODO: May be completely misunderstood.
