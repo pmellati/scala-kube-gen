@@ -57,7 +57,7 @@ object Main {
       createFile(filePath, fileContent)
     }
 
-    // writeModelFiles.unsafeRunSync()
+    writeModelFiles.unsafeRunSync()
   }
 
   // TODO: Use a better library for file system operations.
@@ -308,7 +308,8 @@ object Main {
     scala"""
       package $packageName
 
-      import cats.effect.IO
+      import cats.Applicative
+      import cats.effect.Sync
       
       import org.http4s.{EntityDecoder, EntityEncoder}
       import org.http4s.circe._
@@ -331,8 +332,8 @@ object Main {
         implicit val `${fullName.lit}-Encoder`: Encoder[$simpleName] =
           encodeJson.contramap[$simpleName](_.json)
       
-        implicit val `${fullName.lit}-EntityDecoder`: EntityDecoder[IO, $simpleName] = jsonOf
-        implicit val `${fullName.lit}-EntityEncoder`: EntityEncoder[IO, $simpleName] = jsonEncoderOf
+        implicit def `${fullName.lit}-EntityDecoder`[F[_] : Sync]: EntityDecoder[F, $simpleName] = jsonOf
+        implicit def `${fullName.lit}-EntityEncoder`[F[_] : Applicative]: EntityEncoder[F, $simpleName] = jsonEncoderOf
       }
     """
   }
@@ -361,7 +362,8 @@ object Main {
       
       $importsAnchor
       
-      import cats.effect.IO
+      import cats.Applicative
+      import cats.effect.Sync
       
       import org.http4s.{EntityDecoder, EntityEncoder}
       import org.http4s.circe._
@@ -377,8 +379,8 @@ object Main {
         implicit val `${fullName.lit}-Decoder`: Decoder[$simpleName] = deriveDecoder
         implicit val `${fullName.lit}-Encoder`: Encoder[$simpleName] = deriveEncoder
       
-        implicit val `${fullName.lit}-EntityDecoder`: EntityDecoder[IO, $simpleName] = jsonOf
-        implicit val `${fullName.lit}-EntityEncoder`: EntityEncoder[IO, $simpleName] = jsonEncoderOf
+        implicit def `${fullName.lit}-EntityDecoder`[F[_] : Sync]: EntityDecoder[F, $simpleName] = jsonOf
+        implicit def `${fullName.lit}-EntityEncoder`[F[_] : Applicative]: EntityEncoder[F, $simpleName] = jsonEncoderOf
       }
     """.filterImports(
       packageOf(_) != packageName
