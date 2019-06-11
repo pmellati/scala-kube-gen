@@ -117,11 +117,19 @@ object Main {
     scala"""
       package myapi
 
-      import org.http4s._, client.Client
+      import cats.Applicative
+      import cats.effect.Sync
+
+      import io.circe._
+
+      import org.http4s._, circe._, client.Client
 
       $importsAnchor
 
       object $apiObjectName {
+        private implicit def circeEncoderToHttp4sEntityEncoder[F[_] : Applicative, A : Encoder]: EntityEncoder[F, A] = jsonEncoderOf
+        private implicit def circeDecoderToHttp4sEntityDecoder[F[_] : Sync, A : Decoder]: EntityDecoder[F, A] = jsonOf
+
         $functions
       }
     """
@@ -167,7 +175,7 @@ object Main {
       case param: BodyParameter => param
     }
 
-    val explicitParamsDecl: ScalaCode = {
+    val paramsDecl: ScalaCode = {
       val auxiliaryParams = scala"httpClient: Client[F], baseApiUri: Uri"
 
       if(params.isEmpty)
@@ -175,22 +183,6 @@ object Main {
       else
         scala"($auxiliaryParams, ${params.map(p => writeParam(p, paramRenaming)).mkScala(", ".lit)})"
     }
-
-    val implicitParamsDecl: ScalaCode = {
-      val bodyEncoderParam =
-        bodyParam.map { bodyParam =>
-          val bodyParamType = writeParamType(bodyParam, optionisationIsEnabled = false)
-          scala"bodyEncoder: EntityEncoder[F, $bodyParamType]"
-        }
-      
-      val responseDecoderParam = scala"respDecoder: EntityDecoder[F, $okResultType]"
-
-      val params = (responseDecoderParam :: bodyEncoderParam.toList).mkScala(", ".lit)
-
-      scala"""(implicit $params)"""
-    }
-
-    val paramsDecl = scala"${explicitParamsDecl}${implicitParamsDecl}"
     
     val pathWithScalaStrInterpolation = "s\"\"\"" + opWithMeta.path.replaceAllLiterally("{", "${") + "\"\"\""
 
@@ -221,7 +213,7 @@ object Main {
 
     scala"""
         $scaladocs
-        def ${op.getOperationId.id}[F[_]]$paramsDecl: F[$okResultType] = {
+        def ${op.getOperationId.id}[F[_] : Applicative : Sync]$paramsDecl: F[$okResultType] = {
           val _path = ${pathWithScalaStrInterpolation.lit}
           val _uri  = baseApiUri.withPath(_path) 
 
@@ -330,14 +322,7 @@ object Main {
     scala"""
       package $packageName
 
-      import cats.Applicative
-      import cats.effect.Sync
-      
-      import org.http4s.{EntityDecoder, EntityEncoder}
-      import org.http4s.circe._
-      
       import io.circe.{Decoder, Encoder, Json}, Decoder.decodeJson, Encoder.encodeJson
-      import io.circe.generic.semiauto._
       
       /**
        * The OpenAPI specification based on which this file was generated did not contain a definition
@@ -353,9 +338,6 @@ object Main {
           
         implicit val `${fullName.lit}-Encoder`: Encoder[$simpleName] =
           encodeJson.contramap[$simpleName](_.json)
-      
-        implicit def `${fullName.lit}-EntityDecoder`[F[_] : Sync]: EntityDecoder[F, $simpleName] = jsonOf
-        implicit def `${fullName.lit}-EntityEncoder`[F[_] : Applicative]: EntityEncoder[F, $simpleName] = jsonEncoderOf
       }
     """
   }
@@ -384,12 +366,6 @@ object Main {
       
       $importsAnchor
       
-      import cats.Applicative
-      import cats.effect.Sync
-      
-      import org.http4s.{EntityDecoder, EntityEncoder}
-      import org.http4s.circe._
-      
       import io.circe.{Encoder, Decoder}
       import io.circe.generic.semiauto._
       
@@ -400,9 +376,6 @@ object Main {
       object $simpleName {
         implicit val `${fullName.lit}-Decoder`: Decoder[$simpleName] = deriveDecoder
         implicit val `${fullName.lit}-Encoder`: Encoder[$simpleName] = deriveEncoder
-      
-        implicit def `${fullName.lit}-EntityDecoder`[F[_] : Sync]: EntityDecoder[F, $simpleName] = jsonOf
-        implicit def `${fullName.lit}-EntityEncoder`[F[_] : Applicative]: EntityEncoder[F, $simpleName] = jsonEncoderOf
       }
     """.filterImports(
       packageOf(_) != packageName
