@@ -92,9 +92,9 @@ object Main {
 
     operationByTag.groupBy { case (tag, _) =>
       tag
-    }.mapValues(_.toList.map { case (_, op) =>
+    }.view.mapValues(_.toList.map { case (_, op) =>
       op
-    })
+    }).toMap
   }
 
   def toApiObjectName(tag: OperationTag): String = {
