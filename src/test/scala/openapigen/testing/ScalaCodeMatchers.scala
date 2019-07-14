@@ -1,12 +1,12 @@
-package kubegen.testing
+package openapigen.testing
 
 import java.util.StringTokenizer
 
 import org.specs2.matcher.Matcher
 import org.specs2.matcher.MatchersImplicits._
 
-import kubegen.ScalaCode
-import kubegen.ScalaCode.toLiteral
+import openapigen.ScalaCode
+import openapigen.ScalaCode.toLiteral
 
 object ScalaCodeMatchers {
   def beSameCodeAs(expectedCode: String): Matcher[ScalaCode] = (code: ScalaCode) => (

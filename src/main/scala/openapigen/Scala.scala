@@ -1,8 +1,8 @@
-package kubegen
+package openapigen
 
 object Scala {
   /** Escape the input in back-ticks if it's not a valid scala identifier.
-   * 
+   *
    * Class, object, variable & method names are called identifiers.
    */
   def ident(s: String): String =

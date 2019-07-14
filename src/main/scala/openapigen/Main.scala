@@ -1,4 +1,4 @@
-package kubegen;
+package openapigen
 
 import java.nio.file.{Path, Paths}
 import java.io.PrintWriter
@@ -11,9 +11,9 @@ import cats.implicits._
 import io.swagger.parser.SwaggerParser
 import io.swagger.models._, parameters._, properties._
 
-import kubegen.ScalaStringContext.ScalaStringContextImplicit
-import kubegen.ScalaCode._, syntax._
-import kubegen.Scala._
+import openapigen.ScalaStringContext.ScalaStringContextImplicit
+import openapigen.ScalaCode._, syntax._
+import openapigen.Scala._
 
 object Main {
   def main(args: Array[String]) {
@@ -79,7 +79,7 @@ object Main {
   def operationsByTag(swagger: Swagger): Map[OperationTag, List[OperationWithMeta]] = {
     val operationByTag = for {
       pathAndDesc     <- swagger.getPaths.asScala.toSeq
-      (path, pathDesc) = pathAndDesc 
+      (path, pathDesc) = pathAndDesc
       methodAndOp     <- pathDesc.getOperationMap.asScala.toSeq
       (httpMethod, op) = methodAndOp
       _                = if(op.getTags.size != 1)
@@ -102,10 +102,10 @@ object Main {
       s.headOption.fold(ifEmpty = "") { head =>
         head.toString.capitalize + s.tail
       }
-    
+
     def underscoresToPascalCase(s: String) =
       s.split("_").map(capitaliseFirstChar).mkString
-    
+
     s"${underscoresToPascalCase(tag)}Api"
   }
 
@@ -150,7 +150,7 @@ object Main {
     // TODO: Should be handled better.
     val okResultType = responses.get("200") match {
       case Some(response) =>
-        writeModelType(response.getResponseSchema)    
+        writeModelType(response.getResponseSchema)
       case None =>
         println(s"WARN: Operation ${op.getOperationId} does not have a 200 response. Defaulting to response type 'Unit'.")
         scala"Unit"
@@ -183,7 +183,7 @@ object Main {
       else
         scala"($auxiliaryParams, ${params.map(p => writeParam(p, paramRenaming)).mkScala(", ".lit)})"
     }
-    
+
     val pathWithScalaStrInterpolation = "s\"\"\"" + opWithMeta.path.replaceAllLiterally("{", "${") + "\"\"\""
 
     val uriQueryParamsAdditionCode: ScalaCode = params.collect {
@@ -193,7 +193,7 @@ object Main {
         else
           scala""".withOptionQueryParam("${p.getName.lit}", ${paramRenaming(p).id})"""
     }.mkScala("\n".lit)
-    
+
     val addOptionalBody = bodyParam.fold(ifEmpty = scala"") { bodyParam =>
       val paramName = paramRenaming(bodyParam).id
 
@@ -206,7 +206,7 @@ object Main {
 
     val scaladocs = scala"""
       /** ${op.getDescription.lit}
-       * 
+       *
        $paramsScaladocs
        */
     """
@@ -215,7 +215,7 @@ object Main {
         $scaladocs
         def ${op.getOperationId.id}[F[_] : Applicative : Sync]$paramsDecl: F[$okResultType] = {
           val _path = ${pathWithScalaStrInterpolation.lit}
-          val _uri  = baseApiUri.withPath(_path) 
+          val _uri  = baseApiUri.withPath(_path)
 
           val _uriWithQueryParams = _uri
           $uriQueryParamsAdditionCode
@@ -226,7 +226,7 @@ object Main {
             method = _method,
             uri = _uriWithQueryParams
           )$addOptionalBody
-      
+
           httpClient.expect[$okResultType](_request)
         }
     """
@@ -249,7 +249,7 @@ object Main {
       throw new NotImplementedError(s"Cannot write a type for model: $model")
   }
 
-  
+
   /** Turns a ref like "#/definitions/io.k8s.api.core.v1.Node" into "io.k8s.api.core.v1.Node". */
   def modelRefToSimpleRef(ref: String): String = {
     ref.split('/').last
@@ -276,7 +276,7 @@ object Main {
   def writeParam(p: Parameter, renamed: ParamRenaming): ScalaCode = {
     val noneAsDefaultVal = if(p.getRequired)
       scala""
-    else           
+    else
       scala" = None"
 
     scala"${renamed(p).id}: ${writeParamType(p)}$noneAsDefaultVal"
@@ -298,12 +298,12 @@ object Main {
     val m = model.asInstanceOf[ModelImpl]
 
     m.getType match {
-      case "object" => 
+      case "object" =>
         writeObjectModel(fullName, m)
       case "string" =>
         println(s"WARN: model $fullName has type 'string'. Generating thin json wrapper.")
         // TODO: For more user convenience, write a value class wrapping a String
-        writeThinJsonWrapperModel(fullName) 
+        writeThinJsonWrapperModel(fullName)
       case null =>
         println(s"WARN: model $fullName has type 'null'. Generating thin json wrapper.")
         writeThinJsonWrapperModel(fullName)
@@ -323,7 +323,7 @@ object Main {
       package $packageName
 
       import io.circe.{Decoder, Encoder, Json}, Decoder.decodeJson, Encoder.encodeJson
-      
+
       /**
        * The OpenAPI specification based on which this file was generated did not contain a definition
        * for this class. Therefore, we simply define the class as a thin wrapper around a json value.
@@ -331,11 +331,11 @@ object Main {
       case class $simpleName(
         json: Json
       )
-      
+
       object $simpleName {
         implicit val `${fullName.lit}-Decoder`: Decoder[$simpleName] =
           decodeJson.map(json => $simpleName(json))
-          
+
         implicit val `${fullName.lit}-Encoder`: Encoder[$simpleName] =
           encodeJson.contramap[$simpleName](_.json)
       }
@@ -348,7 +348,7 @@ object Main {
     val simpleName  = simpleNameOf(fullName).id
 
     val properties: Map[String, Property] = Option(m.getProperties) match {
-      case None => 
+      case None =>
         // TODO: Use a logging lib.
         // TODO: Write a thin json wrapper instead.
         println(s"WARN: properties of 'object' model $fullName is 'null'. Empty case class will be generated.")
@@ -363,16 +363,16 @@ object Main {
 
     scala"""
       package ${packageName.fqn}
-      
+
       $importsAnchor
-      
+
       import io.circe.{Encoder, Decoder}
       import io.circe.generic.semiauto._
-      
+
       case class $simpleName(
         $fields
       )
-      
+
       object $simpleName {
         implicit val `${fullName.lit}-Decoder`: Decoder[$simpleName] = deriveDecoder
         implicit val `${fullName.lit}-Encoder`: Encoder[$simpleName] = deriveEncoder
@@ -403,7 +403,7 @@ object Main {
         val fullyQualifiedName = p.getSimpleRef
         // TODO: import the other class.
         simpleNameOf(fullyQualifiedName).id.withImport(fullyQualifiedName)
-      case p: ArrayProperty => 
+      case p: ArrayProperty =>
         val elementType = writePropertyType(p.getItems, optionisationIsEnabled = false)
         scala"List[$elementType]"
       case p: MapProperty =>
@@ -421,7 +421,7 @@ object Main {
 
   def simpleNameOf(fullyQualifiedName: String): String =
     fullyQualifiedName.split('.').last
-  
+
   def packageOf(fullyQualifiedName: String): String =
     fullyQualifiedName.split('.').init.mkString(".")
 }

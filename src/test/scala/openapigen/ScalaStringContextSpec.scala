@@ -1,10 +1,10 @@
-package kubegen
+package openapigen
 
 import org.specs2.mutable.Specification
 
-import kubegen.ScalaStringContext.ScalaStringContextImplicit
-import kubegen.ScalaCode._, syntax._
-import kubegen.testing.ScalaCodeMatchers._
+import openapigen.ScalaStringContext.ScalaStringContextImplicit
+import openapigen.ScalaCode._, syntax._
+import openapigen.testing.ScalaCodeMatchers._
 
 class ScalaStringContextSpec extends Specification {
   "Creation" in {
@@ -30,7 +30,7 @@ class ScalaStringContextSpec extends Specification {
       case class ${className.id} {
         $fieldsScala
       }"""
-    
+
     composedCode must beSameCodeAs("""
       case class MyClass {
         id: String,

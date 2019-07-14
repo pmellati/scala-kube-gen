@@ -1,4 +1,4 @@
-package kubegen
+package openapigen
 
 import Scala.{ident, sanitiseFqn}
 import ScalaCode._
@@ -38,15 +38,15 @@ case class ScalaCode(fragments: List[Fragment], imports: Set[String]) {
 
 object ScalaCode {
   trait Fragment
-  case class  Text(rendered: String) extends Fragment 
-  case object ImportsAnchor          extends Fragment  
+  case class  Text(rendered: String) extends Fragment
+  case object ImportsAnchor          extends Fragment
 
   def empty: ScalaCode =
     ScalaCode(Nil, Set.empty)
-  
+
   def literal(s: String): ScalaCode =
     ScalaCode(List(Text(s)), Set.empty)
-  
+
   def importsAnchor: ScalaCode =
     ScalaCode(List(ImportsAnchor), Set.empty)
 
@@ -55,7 +55,7 @@ object ScalaCode {
 
   def concat(c1: ScalaCode, c2: ScalaCode): ScalaCode =
     ScalaCode(c1.fragments ++ c2.fragments, c1.imports ++ c2.imports)
-  
+
   def toLiteral(code: ScalaCode): String = {
 
     // TODO: Refactor and document this function.
@@ -82,7 +82,7 @@ object ScalaCode {
           case (' '::rest, _) => deIndent(rest, deIndentSize - 1)
           case (_, _)         => l
         }
-        
+
         deIndent(l.toList, deIndentSize).mkString
       }
 
@@ -118,7 +118,7 @@ trait ScalaCodeSyntax {
 
     def id: ScalaCode =
       literal(ident(s))
-    
+
     def fqn: ScalaCode =
       literal(sanitiseFqn(s))
   }
