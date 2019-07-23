@@ -118,9 +118,12 @@ object Main {
       package myapi
 
       import cats.Applicative
+      import cats.data.Kleisli
       import cats.effect.Sync
 
       import io.circe._
+
+      import openapigen.ClientConfig
 
       import org.http4s._, circe._, client.Client
 
@@ -129,6 +132,8 @@ object Main {
       object $apiObjectName {
         private implicit def circeEncoderToHttp4sEntityEncoder[F[_] : Applicative, A : Encoder]: EntityEncoder[F, A] = jsonEncoderOf
         private implicit def circeDecoderToHttp4sEntityDecoder[F[_] : Sync, A : Decoder]: EntityDecoder[F, A] = jsonOf
+
+        type Action[F[_], A] = Kleisli[F, ClientConfig[F], A]
 
         $functions
       }
@@ -176,12 +181,10 @@ object Main {
     }
 
     val paramsDecl: ScalaCode = {
-      val auxiliaryParams = scala"httpClient: Client[F], baseApiUri: Uri"
-
       if(params.isEmpty)
-        scala"($auxiliaryParams)"
+        scala""
       else
-        scala"($auxiliaryParams, ${params.map(p => writeParam(p, paramRenaming)).mkScala(", ".lit)})"
+        scala"(${params.map(p => writeParam(p, paramRenaming)).mkScala(", ".lit)})"
     }
 
     val pathWithScalaStrInterpolation = "s\"\"\"" + opWithMeta.path.replaceAllLiterally("{", "${") + "\"\"\""
@@ -213,9 +216,9 @@ object Main {
 
     scala"""
         $scaladocs
-        def ${op.getOperationId.id}[F[_] : Applicative : Sync]$paramsDecl: F[$okResultType] = {
+        def ${op.getOperationId.id}[F[_] : Applicative : Sync]$paramsDecl: Action[F, $okResultType] = Kleisli { _config =>
           val _path = ${pathWithScalaStrInterpolation.lit}
-          val _uri  = baseApiUri.withPath(_path)
+          val _uri  = _config.baseApiUri.withPath(_path)
 
           val _uriWithQueryParams = _uri
           $uriQueryParamsAdditionCode
@@ -227,7 +230,7 @@ object Main {
             uri = _uriWithQueryParams
           )$addOptionalBody
 
-          httpClient.expect[$okResultType](_request)
+          _config.httpClient.expect[$okResultType](_request)
         }
     """
   }
