@@ -5,8 +5,8 @@ import java.util.StringTokenizer
 import org.specs2.matcher.Matcher
 import org.specs2.matcher.MatchersImplicits._
 
-import openapigen.ScalaCode
-import openapigen.ScalaCode.toLiteral
+import openapigen.util.ScalaCode
+import openapigen.util.ScalaCode.toLiteral
 
 object ScalaCodeMatchers {
   def beSameCodeAs(expectedCode: String): Matcher[ScalaCode] = (code: ScalaCode) => (

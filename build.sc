@@ -4,7 +4,10 @@ object openapigen extends ScalaModule {
   def scalaVersion = "2.13.0"
 
   def scalacOptions = Seq(
-    "-deprecation"
+    "-encoding", "utf8",
+    "-deprecation",
+    "-unchecked",
+    "-Xlint",
   )
 
   def ivyDeps = Agg(

@@ -1,4 +1,4 @@
-package openapigen
+package openapigen.util
 
 import Scala.{ident, sanitiseFqn}
 import ScalaCode._

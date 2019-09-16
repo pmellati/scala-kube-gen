@@ -1,4 +1,4 @@
-package openapigen
+package openapigen.util
 
 object Scala {
   /** Escape the input in back-ticks if it's not a valid scala identifier.

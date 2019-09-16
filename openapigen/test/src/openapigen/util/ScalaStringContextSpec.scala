@@ -1,10 +1,11 @@
-package openapigen
+package openapigen.util
 
 import org.specs2.mutable.Specification
 
-import openapigen.ScalaStringContext.ScalaStringContextImplicit
-import openapigen.ScalaCode._, syntax._
 import openapigen.testing.ScalaCodeMatchers._
+
+import ScalaStringContext.ScalaStringContextImplicit
+import ScalaCode._, syntax._
 
 class ScalaStringContextSpec extends Specification {
   "Creation" in {
