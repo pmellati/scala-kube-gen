@@ -11,53 +11,76 @@ import cats.implicits._
 import io.swagger.parser.SwaggerParser
 import io.swagger.models._, parameters._, properties._
 
+import scopt.{OParser, Read}
+
 import openapigen.ScalaStringContext.ScalaStringContextImplicit
 import openapigen.ScalaCode._, syntax._
 import openapigen.Scala._
 
 object Main {
+  case class CliArgs(swaggerFile: Path, apisOutDir: Path, modelsOutDir: Path)
+
+  implicit val pathRead: Read[Path] = Read.fileRead.map(_.toPath)
+
+  val cliArgsParser: OParser[Unit, CliArgs] = {
+    val builder = OParser.builder[CliArgs]
+    import builder._
+
+    OParser.sequence(
+      programName("openapigen"),
+      opt[Path]('s', "swagger")
+        .action((path, args) => args.copy(swaggerFile = path))
+        .text("path to swagger file")
+        .required,
+      opt[Path]('a', "apis-dir")
+        .action((path, args) => args.copy(apisOutDir = path))
+        .text("directory to write API files in")
+        .required,
+      opt[Path]('m', "models-dir")
+        .action((path, args) => args.copy(modelsOutDir = path))
+        .text("directory to write API files in")
+        .required,
+    )
+  }
+
   def main(args: Array[String]): Unit = {
-    val swagger = new SwaggerParser().read("/Users/pouria/Documents/kube-openapi-spec.json")
+    OParser.parse(cliArgsParser, args, CliArgs(null, null, null)) match {
+      case Some(args) =>
+        run(args).unsafeRunSync()
+      case _ =>
+        // arguments are bad, error message will have been displayed
+    }
+  }
 
-    val outputProjectDir = Paths.get("/Users/pouria/src/sample-scala-client/src/main/scala/example")
+  def run(config: CliArgs): IO[Unit] = {
+    val readSwagger = IO { new SwaggerParser().read(config.swaggerFile.toString) }
 
-    // val nodeStatusPath         = swagger.getPath("/api/v1/nodes/{name}/status")
-    // val getNodeStatusOperation = nodeStatusPath.getGet
-    // val getNodeStOperationFilePath = outputProjectDir.resolve("apis").resolve(s"${getNodeStatusOperation.getOperationId}.scala")
+    for {
+      swagger <- readSwagger
+      _       <- writeApiFiles(swagger, config.apisOutDir)
+      _       <- writeModelFiles(swagger, config.modelsOutDir)
+    } yield ()
+  }
 
-    // createFile(
-    //   getNodeStOperationFilePath,
-    //   writeOperation("/api/v1/nodes/{name}/status", HttpMethod.GET, getNodeStatusOperation).toLiteral
-    // ).unsafeRunSync()
-
+  def writeApiFiles(swagger: Swagger, outDir: Path): IO[Unit] = {
     val opsByTag = operationsByTag(swagger)
 
-    val createApiFiles = opsByTag.toList.traverse { case (apiTag, ops) =>
-      val filePath = outputProjectDir.resolve("apis").resolve(s"${toApiObjectName(apiTag)}.scala")
+    opsByTag.toList.traverse { case (apiTag, ops) =>
+      val filePath = outDir.resolve(s"${toApiObjectName(apiTag)}.scala")
       val fileContent = writeApiFile(apiTag, ops).toLiteral
 
       createFile(filePath, fileContent)
-    }
+    }.void
+  }
 
-    createApiFiles.unsafeRunSync()
+  def writeModelFiles(swagger: Swagger, outDir: Path): IO[Unit] = {
+    val definitions = swagger.getDefinitions.asScala.toMap
 
-    val apiTag = "core_v1"
-    val nodeApiOps = opsByTag(apiTag)
-    val nodeApiFilePath = outputProjectDir.resolve("apis").resolve(s"${toApiObjectName(apiTag)}.scala")
-    createFile(
-      nodeApiFilePath,
-      writeApiFile(apiTag, nodeApiOps).toLiteral
-    ).unsafeRunSync()
-
-    val definitions   = swagger.getDefinitions.asScala.toMap
-
-    val writeModelFiles = definitions.toList.traverse { case (modelName, model) =>
-      val filePath: Path      = outputProjectDir.resolve("models").resolve(s"$modelName.scala")
+    definitions.toList.traverse { case (modelName, model) =>
+      val filePath: Path      = outDir.resolve(s"$modelName.scala")
       val fileContent: String = writeModel(modelName, model).toLiteral
       createFile(filePath, fileContent)
-    }
-
-    writeModelFiles.unsafeRunSync()
+    }.void
   }
 
   // TODO: Use a better library for file system operations.

@@ -8,8 +8,9 @@ object openapigen extends ScalaModule {
   )
 
   def ivyDeps = Agg(
+    ivy"com.github.scopt::scopt:4.0.0-RC2",
     ivy"io.swagger:swagger-parser:1.0.44",
-    ivy"org.typelevel::cats-effect:2.0.0-M4"
+    ivy"org.typelevel::cats-effect:2.0.0-M4",
   )
 
   object test extends Tests {
