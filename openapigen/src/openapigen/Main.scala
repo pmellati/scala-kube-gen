@@ -3,7 +3,7 @@ package openapigen
 import java.nio.file.{Path, Paths}
 import java.io.PrintWriter
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 import cats.effect.IO
 import cats.implicits._
@@ -16,7 +16,7 @@ import openapigen.ScalaCode._, syntax._
 import openapigen.Scala._
 
 object Main {
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
     val swagger = new SwaggerParser().read("/Users/pouria/Documents/kube-openapi-spec.json")
 
     val outputProjectDir = Paths.get("/Users/pouria/src/sample-scala-client/src/main/scala/example")
