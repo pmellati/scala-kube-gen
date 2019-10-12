@@ -30,3 +30,23 @@ object openapigen extends ScalaModule {
     )
   }
 }
+
+object kubeclient extends ScalaModule {
+  override def scalaVersion = "2.12.8"
+
+  override def scalacOptions = Seq(
+    "-deprecation",
+  )
+
+  val http4sVersion = "0.20.0-RC1"
+
+  override def ivyDeps = Agg(
+    ivy"org.http4s::http4s-blaze-client:$http4sVersion",
+    ivy"org.http4s::http4s-circe:$http4sVersion",
+    ivy"org.http4s::http4s-dsl:$http4sVersion",
+    ivy"io.circe::circe-generic:0.11.1",
+    ivy"org.typelevel::cats-effect:1.2.0",
+  )
+
+  override def generatedSources = T.sources{ millSourcePath / 'generatedSrc }
+}
