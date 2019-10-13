@@ -1,3 +1,4 @@
+import $ivy.`com.lihaoyi::mill-contrib-bloop:$MILL_VERSION`
 import mill._, scalalib._
 
 object openapigen extends ScalaModule {
@@ -49,4 +50,18 @@ object kubeclient extends ScalaModule {
   )
 
   override def generatedSources = T.sources{ millSourcePath / 'generatedSrc }
+
+  object test extends Tests {
+    def testFrameworks = Seq(
+      "org.specs2.runner.Specs2Framework"
+    )
+
+    def scalacOptions = openapigen.scalacOptions() ++ Seq(
+      "-Yrangepos"
+    )
+
+    def ivyDeps = Agg(
+      ivy"org.specs2::specs2-core:4.6.0"
+    )
+  }
 }
