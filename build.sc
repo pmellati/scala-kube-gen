@@ -62,6 +62,7 @@ object kubeclient extends ScalaModule {
 
     def ivyDeps = kubeclient.ivyDeps() ++ Agg(
       ivy"com.lihaoyi::os-lib:0.3.0",
+      ivy"io.circe::circe-yaml:0.10.0",
       ivy"org.specs2::specs2-core:4.6.0",
     )
   }
