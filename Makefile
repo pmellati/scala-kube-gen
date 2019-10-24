@@ -1,4 +1,4 @@
-gen-kube-client-src:
+kube-client-gen-src:
 	rm -rf kubeclient/generatedSrc/*
 	mill openapigen \
 	  -s kubeclient/spec/kube-openapi-spec.json \
