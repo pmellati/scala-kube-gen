@@ -23,7 +23,7 @@ object openapigen extends ScalaModule {
     )
 
     def scalacOptions = openapigen.scalacOptions() ++ Seq(
-      "-Yrangepos"
+      "-Yrangepos"  // required by specs2
     )
 
     def ivyDeps = Agg(
@@ -37,12 +37,17 @@ object kubeclient extends ScalaModule {
 
   override def scalacOptions = Seq(
     "-deprecation",
+    "-encoding", "utf8",
+    "-language:_",
+    "-unchecked",
+    "-Xlint",
   )
 
   val http4sVersion = "0.20.0-RC1"
 
   override def ivyDeps = Agg(
     ivy"io.circe::circe-generic:0.11.1",
+    ivy"io.circe::circe-yaml:0.10.0",
     ivy"org.http4s::http4s-blaze-client:$http4sVersion",
     ivy"org.http4s::http4s-circe:$http4sVersion",
     ivy"org.http4s::http4s-dsl:$http4sVersion",
@@ -57,12 +62,11 @@ object kubeclient extends ScalaModule {
     )
 
     def scalacOptions = openapigen.scalacOptions() ++ Seq(
-      "-Yrangepos"
+      "-Yrangepos"  // required by specs2
     )
 
     def ivyDeps = kubeclient.ivyDeps() ++ Agg(
       ivy"com.lihaoyi::os-lib:0.3.0",
-      ivy"io.circe::circe-yaml:0.10.0",
       ivy"org.specs2::specs2-core:4.6.0",
     )
   }
