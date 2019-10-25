@@ -4,11 +4,10 @@ import java.util.UUID.randomUUID
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
+import _root_.io.circe._, yaml.parser.{parse => parseYaml}
 import cats.effect._
-import io.circe._, yaml.parser.{parse => parseYaml}
 import org.specs2.mutable.Specification
 
-import myapi.CoreV1Api
 import kubeclient.SslUtil.clientConfigFromKubeConfig
 
 object httpVerbsSpec extends Specification {

@@ -13,7 +13,7 @@ import openapigen.write.api.writeApiFiles
 import openapigen.write.model.writeModelFiles
 
 object Main {
-  case class CliArgs(swaggerFile: Path, apisOutDir: Path, modelsOutDir: Path)
+  case class CliArgs(swaggerFile: Path, apisOutDir: Path, modelsOutDir: Path, basePackage: String)
 
   implicit val pathRead: Read[Path] = Read.fileRead.map(_.toPath)
 
@@ -27,6 +27,10 @@ object Main {
         .action((path, args) => args.copy(swaggerFile = path))
         .text("path to swagger file")
         .required,
+      opt[String]('p', "base-package")
+        .action((basePkg, args) => args.copy(basePackage = basePkg))
+        .text("base scala package preprended to all generated code")
+        .required,
       opt[Path]('a', "apis-dir")
         .action((path, args) => args.copy(apisOutDir = path))
         .text("directory to write API files in")
@@ -39,7 +43,7 @@ object Main {
   }
 
   def main(args: Array[String]): Unit = {
-    OParser.parse(cliArgsParser, args, CliArgs(null, null, null)) match {
+    OParser.parse(cliArgsParser, args, CliArgs(null, null, null, null)) match {
       case Some(args) =>
         run(args).unsafeRunSync()
       case _ =>
@@ -52,8 +56,8 @@ object Main {
 
     for {
       swagger <- readSwagger
-      _       <- writeApiFiles(swagger, config.apisOutDir)
-      _       <- writeModelFiles(swagger, config.modelsOutDir)
+      _       <- writeApiFiles(swagger, config.apisOutDir, config.basePackage)
+      _       <- writeModelFiles(swagger, config.modelsOutDir, config.basePackage)
     } yield ()
   }
 }

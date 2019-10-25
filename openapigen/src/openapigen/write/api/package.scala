@@ -14,12 +14,12 @@ import openapigen.util._, ScalaCode._, syntax._, ScalaStringContext.ScalaStringC
 package object api {
   type OperationTag = String
 
-  def writeApiFiles(swagger: Swagger, outDir: Path): IO[Unit] = {
+  def writeApiFiles(swagger: Swagger, outDir: Path, packageName: String): IO[Unit] = {
     val opsByTag = operationsByTag(swagger)
 
     opsByTag.toList.traverse { case (apiTag, ops) =>
       val filePath = outDir.resolve(s"${toApiObjectName(apiTag)}.scala")
-      val fileContent = writeApiFile(apiTag, ops).toLiteral
+      val fileContent = writeApiFile(apiTag, ops, packageName).toLiteral
 
       createFile(filePath, fileContent)
     }.void
@@ -58,19 +58,19 @@ package object api {
     s"${underscoresToPascalCase(tag)}Api"
   }
 
-  def writeApiFile(tag: OperationTag, operations: List[OperationWithMeta]): ScalaCode = {
-    val functions = operations.map(writeOperation).mkScala("\n".lit)
+  def writeApiFile(tag: OperationTag, operations: List[OperationWithMeta], basePackage: String): ScalaCode = {
+    val functions = operations.map(writeOperation(_, basePackage)).mkScala("\n".lit)
 
     val apiObjectName = toApiObjectName(tag).id
 
     scala"""
-      package myapi
+      package ${basePackage.fqn}
 
       import cats.Applicative
       import cats.data.Kleisli
       import cats.effect.Sync
 
-      import io.circe._
+      import _root_.io.circe._
 
       import openapigen.ClientConfig
 
@@ -94,7 +94,7 @@ package object api {
    */
   type ParamRenaming = Parameter => String
 
-  def writeOperation(opWithMeta: OperationWithMeta): ScalaCode = {
+  def writeOperation(opWithMeta: OperationWithMeta, basePackage: String): ScalaCode = {
     val op = opWithMeta.operation
 
     val params = op.getParameters.asScala.toList
@@ -104,7 +104,7 @@ package object api {
     // TODO: Should be handled better.
     val okResultType = responses.get("200") match {
       case Some(response) =>
-        writeModelType(response.getResponseSchema)
+        writeModelType(response.getResponseSchema, basePackage)
       case None =>
         println(s"WARN: Operation ${op.getOperationId} does not have a 200 response. Defaulting to response type 'Unit'.")
         scala"Unit"
@@ -133,7 +133,7 @@ package object api {
       if(params.isEmpty)
         scala""
       else
-        scala"(${params.map(p => writeParam(p, paramRenaming)).mkScala(", ".lit)})"
+        scala"(${params.map(p => writeParam(p, paramRenaming, basePackage)).mkScala(", ".lit)})"
     }
 
     val pathWithScalaStrInterpolation = "s\"\"\"" + opWithMeta.path.replaceAllLiterally("{", "${") + "\"\"\""
@@ -184,23 +184,23 @@ package object api {
     """
   }
 
-  def writeParam(p: Parameter, renamed: ParamRenaming): ScalaCode = {
+  def writeParam(p: Parameter, renamed: ParamRenaming, basePackage: String): ScalaCode = {
     val noneAsDefaultVal = if(p.getRequired)
       scala""
     else
       scala" = None"
 
-    scala"${renamed(p).id}: ${writeParamType(p)}$noneAsDefaultVal"
+    scala"${renamed(p).id}: ${writeParamType(p, basePackage)}$noneAsDefaultVal"
   }
 
-  def writeParamType(p: Parameter, optionisationIsEnabled: Boolean = true): ScalaCode = {
+  def writeParamType(p: Parameter, basePackage: String, optionisationIsEnabled: Boolean = true): ScalaCode = {
     val typeWithoutOptionisation: ScalaCode = p match {
       case p: PathParameter =>
         scala"${writeType(p.getType)}"
       case p: QueryParameter =>
         scala"${writeType(p.getType)}"
       case p: BodyParameter =>
-        writeModelType(p.getSchema)
+        writeModelType(p.getSchema, basePackage)
       case p =>
         throw new NotImplementedError(s"Type of param: $p")
     }
@@ -222,9 +222,9 @@ package object api {
 
   // TODO: Needs a better name and documentation.
   // Write a type that refers to the model, rather than a definition of the model.
-  def writeModelType(model: Model): ScalaCode = model match {
+  def writeModelType(model: Model, basePackage: String): ScalaCode = model match {
     case model: RefModel =>
-      val fqn = modelRefToSimpleRef(model.getReference)
+      val fqn = s"$basePackage.${modelRefToSimpleRef(model.getReference)}"
 
       simpleNameOf(fqn).id.withImport(fqn)
     case model: ModelImpl =>

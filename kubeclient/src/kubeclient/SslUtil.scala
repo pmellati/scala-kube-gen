@@ -9,8 +9,8 @@ import javax.net.ssl.{SSLContext, KeyManagerFactory, TrustManagerFactory}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
+import _root_.io.circe._
 import cats.effect._
-import io.circe._
 import org.http4s.client.blaze._
 import org.http4s.Uri
 
