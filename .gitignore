@@ -1,3 +1,4 @@
 kubeclient/generatedSrc/
 out/
 target/
+.tmp/
