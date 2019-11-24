@@ -1,7 +1,7 @@
 kube-client-gen-src:
 	rm -rf kubeclient/generatedSrc/*
 	mill openapigen \
-	  -s kubeclient/spec/kube-openapi-spec.json \
+	  -s kubeclient/spec/v1.16.4/swagger.json \
 		-p "kubeclient" \
 		-a kubeclient/generatedSrc/kubeclient/apis \
 		-m kubeclient/generatedSrc/kubeclient/models
