@@ -16,6 +16,8 @@ import kubeclient.io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta
 import kubeclient.SslUtil.clientConfigFromKubeConfig
 
 object BasicTests extends Specification {
+  sequential  // TODO: Github actions hangs without this. Why?
+
   implicit val cs: ContextShift[IO] = IO.contextShift(global)
 
   val clientConfig = clientConfigFromKubeConfig[IO](readTestKubeConf())

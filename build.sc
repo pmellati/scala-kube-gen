@@ -33,7 +33,7 @@ object openapigen extends ScalaModule {
 }
 
 object kubeclient extends ScalaModule {
-  override def scalaVersion = "2.12.8"
+  override def scalaVersion = "2.12.10"
 
   override def scalacOptions = Seq(
     "-deprecation",

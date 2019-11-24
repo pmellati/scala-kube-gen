@@ -1,4 +1,4 @@
-# scala-openapi-gen
+# scala-openapi-gen ![](https://github.com/pmellati/scala-openapi-gen/workflows/CI/badge.svg)
 
 This project is aimed at generating purely functional & modern client libraries from [Swagger/OpenAPI specifications](https://en.wikipedia.org/wiki/OpenAPI_Specification).
 
