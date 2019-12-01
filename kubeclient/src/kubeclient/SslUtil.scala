@@ -29,10 +29,14 @@ object SslUtil {
       }
   }
 
-  // TODO: Return Either[..] instead of 'throw'ing.
+  // TODO: Return Either[..] instead of 'throw'ing. Do this in a less fragile way.
   def sslContextAndApiUriFromKubeConfig(kubeConfig: Json): (SSLContext, Uri) = {
-    val currentContext = kubeConfig.hcursor.downField("current-context").as[String].right.get
-    val Array(username, clusterName) = currentContext.split("@")
+    val currentContextName = kubeConfig.hcursor.downField("current-context").as[String].right.get
+
+    val currentContext = kubeConfig.hcursor.downField("contexts").as[List[Json]].right.get.find(_.hcursor.downField("name").as[String] == Right(currentContextName)).get
+
+    val username    = currentContext.hcursor.downField("context").downField("user").as[String].right.get
+    val clusterName = currentContext.hcursor.downField("context").downField("cluster").as[String].right.get
 
     val user: Json = kubeConfig.hcursor.downField("users").as[List[Json]].right.get.find(_.hcursor.downField("name").as[String] == Right(username)).get
 

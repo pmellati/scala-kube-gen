@@ -1,3 +1,5 @@
+# TODO: Run actions in containers.
+
 name: CI
 
 on: [push]
@@ -6,7 +8,7 @@ jobs:
   test:
     name: Test
 
-    runs-on: macOS-latest
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v1
@@ -18,8 +20,9 @@ jobs:
         with:
           java-version: '11'
 
-      - name: Install mill
-        run: brew install mill
+      - uses: jodersky/setup-mill@master
+        with:
+          mill-version: 0.5.1
 
       - name: Test openapigen
         run: mill openapigen.test
@@ -27,8 +30,16 @@ jobs:
       - name: Generate kubeclient sources
         run: make kube-client-gen-src
 
+      - uses: engineerd/setup-kind@v0.1.0
+        with:
+          version: "v0.6.0"
+          skipClusterCreation: true
+
+      - name: Prepare kind cluster for testing kubeclient
+        run: |
+          mkdir -p .tmp
+          kind create cluster --name test --image "kindest/node:v1.16.3"
+          kind get kubeconfig --name test > .tmp/test-kube-conf
+
       - name: Test kubeclient
-        # Cannot use the default 'mill' script here, as it will ignore JAVA_HOME, and use the latest java, trigerring
-        # the following bug that occurs with scala 2.12.x and the latest versions of java:
-        # https://github.com/scala/bug/issues/11608
-        run: /usr/local/Cellar/mill/0.5.2/libexec/mill kubeclient.test
+        run: mill kubeclient.test
