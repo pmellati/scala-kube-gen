@@ -28,53 +28,53 @@ object BasicTests extends Specification {
     ns.metadata.get.name must beSome(nsName)
   }
 
-  "Create, fetch & delete a deployment" in tempNs { ns =>
-    val deploymentYaml = """
-      apiVersion: apps/v1
-      kind: Deployment
-      metadata:
-        name: nginx-deployment
-        labels:
-          app: nginx
-      spec:
-        replicas: 3
-        selector:
-          matchLabels:
-            app: nginx
-        template:
-          metadata:
-            labels:
-              app: nginx
-          spec:
-            containers:
-            - name: nginx
-              image: nginx:1.7.9
-              ports:
-              - containerPort: 80
-    """
+  // "Create, fetch & delete a deployment" in tempNs { ns =>
+  //   val deploymentYaml = """
+  //     apiVersion: apps/v1
+  //     kind: Deployment
+  //     metadata:
+  //       name: nginx-deployment
+  //       labels:
+  //         app: nginx
+  //     spec:
+  //       replicas: 3
+  //       selector:
+  //         matchLabels:
+  //           app: nginx
+  //       template:
+  //         metadata:
+  //           labels:
+  //             app: nginx
+  //         spec:
+  //           containers:
+  //           - name: nginx
+  //             image: nginx:1.7.9
+  //             ports:
+  //             - containerPort: 80
+  //   """
 
-    val deployment = parseYaml(deploymentYaml).right.get.as[Deployment].right.get
+  //   val deployment = parseYaml(deploymentYaml).right.get.as[Deployment].right.get
 
-    val fetched = run(
-      for {
-        _       <- AppsV1Api.createAppsV1NamespacedDeployment[IO](namespace = ns, body = deployment)
-        fetched <- AppsV1Api.readAppsV1NamespacedDeployment[IO](name = "nginx-deployment", namespace = ns)
-        _       <- AppsV1Api.deleteAppsV1NamespacedDeployment[IO](name = "nginx-deployment", namespace = ns)
-      } yield fetched
-    )
+  //   val fetched = run(
+  //     for {
+  //       _       <- AppsV1Api.createAppsV1NamespacedDeployment[IO](namespace = ns, body = deployment)
+  //       fetched <- AppsV1Api.readAppsV1NamespacedDeployment[IO](name = "nginx-deployment", namespace = ns)
+  //       _       <- AppsV1Api.deleteAppsV1NamespacedDeployment[IO](name = "nginx-deployment", namespace = ns)
+  //     } yield fetched
+  //   )
 
-    fetched.spec.get.replicas.get must_== 3
-    fetched.spec.get.selector.matchLabels.get must_== Map("app" -> "nginx")
-    fetched.spec.get.template.metadata.get.labels.get must_== Map("app" -> "nginx")
-    fetched.spec.get.template.spec.get.containers.length must_== 1
-    fetched.spec.get.template.spec.get.containers.head.name must_== "nginx"
-    fetched.spec.get.template.spec.get.containers.head.image.get must_== "nginx:1.7.9"
-    fetched.spec.get.template.spec.get.containers.head.command must beNone
-    fetched.spec.get.template.spec.get.containers.head.ports.get.head.containerPort must_== 80
-  }
+  //   fetched.spec.get.replicas.get must_== 3
+  //   fetched.spec.get.selector.matchLabels.get must_== Map("app" -> "nginx")
+  //   fetched.spec.get.template.metadata.get.labels.get must_== Map("app" -> "nginx")
+  //   fetched.spec.get.template.spec.get.containers.length must_== 1
+  //   fetched.spec.get.template.spec.get.containers.head.name must_== "nginx"
+  //   fetched.spec.get.template.spec.get.containers.head.image.get must_== "nginx:1.7.9"
+  //   fetched.spec.get.template.spec.get.containers.head.command must beNone
+  //   fetched.spec.get.template.spec.get.containers.head.ports.get.head.containerPort must_== 80
+  // }
 
   private def run[A](action: Action[IO, A]): A =
-    clientConfig.use(action.run).unsafeRunSync()
+    clientConfig.use{c => println("CLIENT CONFIG CREATED"); action.run(c)}.unsafeRunSync()
 
   /** Testing helper to run a test with a temporary namespace that will be deleted after the test. */
   private def tempNs[R : AsResult](runTest: String => R): Result = {
@@ -86,11 +86,16 @@ object BasicTests extends Specification {
       )
     )
 
+    println("CREATING NS")
+
     run(
       for {
         _          <- CoreV1Api.createCoreV1Namespace[IO](body = ns)
+        _           = println("CREATED NS")
         testResult  = AsResult(runTest(nsName))
+        _           = println("RAN TEST")
         _          <- CoreV1Api.deleteCoreV1Namespace[IO](nsName)
+        _           = println("DELETED NS")
       } yield testResult
     )
   }
