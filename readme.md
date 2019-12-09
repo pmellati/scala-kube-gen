@@ -9,3 +9,9 @@ The primary motivation for this project is to support the latest versions of the
 ## How ready is the project?
 
 The project is still at very early stages, and requires a good amount of polishing. However, most of the core translation logic is implemented.
+
+## Generated source code
+
+The generated sources can be found under [the `generated-sources` branch](https://github.com/pmellati/scala-openapi-gen/tree/generated-sources/kubeclient/generatedSrc/kubeclient).
+
+(There is github action that, on each push to `master`, generates, reformats and pushes the generated code to the `generated-sources` branch.)

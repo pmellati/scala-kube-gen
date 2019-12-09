@@ -1,5 +1,5 @@
 import $ivy.`com.lihaoyi::mill-contrib-bloop:$MILL_VERSION`
-import mill._, scalalib._
+import mill._, scalalib._, scalafmt._, define._
 
 object openapigen extends ScalaModule {
   def scalaVersion = "2.13.0"
@@ -32,7 +32,7 @@ object openapigen extends ScalaModule {
   }
 }
 
-object kubeclient extends ScalaModule {
+object kubeclient extends ScalaModule with ScalafmtModule {
   override def scalaVersion = "2.12.10"
 
   override def scalacOptions = Seq(
@@ -55,6 +55,16 @@ object kubeclient extends ScalaModule {
   )
 
   override def generatedSources = T.sources{ millSourcePath / 'generatedSrc }
+
+  // Overriden to format generatedSources, rather than sources.
+  override def reformat(): Command[Unit] = T.command {
+    ScalafmtWorkerModule
+      .worker()
+      .reformat(
+        filesToFormat(generatedSources()),
+        scalafmtConfig().head
+      )
+  }
 
   object test extends Tests {
     def testFrameworks = Seq(
