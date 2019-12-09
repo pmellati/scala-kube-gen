@@ -24,8 +24,8 @@ jobs:
         with:
           mill-version: 0.5.1
 
-      - name: Test openapigen
-        run: mill openapigen.test
+      # - name: Test openapigen
+      #   run: mill openapigen.test
 
       - name: Generate kubeclient sources
         run: make kube-client-gen-src
@@ -40,6 +40,11 @@ jobs:
           mkdir -p .tmp
           kind create cluster --name test --image "kindest/node:v1.16.3"
           kind get kubeconfig --name test > .tmp/test-kube-conf
+
+      - name: wtf
+        run: |
+          cat .tmp/test-kube-conf
+          kubectl cluster-info
 
       - name: Test kubeclient
         run: mill kubeclient.test
