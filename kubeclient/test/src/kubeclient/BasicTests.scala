@@ -16,17 +16,14 @@ import kubeclient.io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta
 import kubeclient.SslUtil.clientConfigFromKubeConfig
 
 object BasicTests extends Specification {
-  sequential
+  sequential  // TODO: Github actions hangs without this. Why?
 
   implicit val cs: ContextShift[IO] = IO.contextShift(global)
 
   val clientConfig = clientConfigFromKubeConfig[IO](readTestKubeConf())
 
   "Create, fetch & delete a namespace" in tempNs { nsName =>
-    println(s"IN namespace TEST! NS: $nsName")
     val ns = run(CoreV1Api.readCoreV1Namespace[IO](nsName))
-
-    println(s"NS: $ns")
 
     ns.apiVersion        must beSome("v1")
     ns.kind              must beSome("Namespace")
@@ -34,8 +31,6 @@ object BasicTests extends Specification {
   }
 
   "Create, fetch & delete a deployment" in tempNs { ns =>
-    println(s"IN DEPLOYMENT TEST! NS: $ns")
-
     val deploymentYaml = """
       apiVersion: apps/v1
       kind: Deployment
@@ -62,16 +57,11 @@ object BasicTests extends Specification {
 
     val deployment = parseYaml(deploymentYaml).right.get.as[Deployment].right.get
 
-    println("GOnna run!")
-
     val fetched = run(
       for {
         _       <- AppsV1Api.createAppsV1NamespacedDeployment[IO](namespace = ns, body = deployment)
-        _        = println("Created deployment")
         fetched <- AppsV1Api.readAppsV1NamespacedDeployment[IO](name = "nginx-deployment", namespace = ns)
-        _        = println("Read deployment")
         _       <- AppsV1Api.deleteAppsV1NamespacedDeployment[IO](name = "nginx-deployment", namespace = ns)
-        _        = println("DELETED deployment")
       } yield fetched
     )
 
@@ -86,7 +76,7 @@ object BasicTests extends Specification {
   }
 
   private def run[A](action: Action[IO, A]): A =
-    clientConfig.use{c => println("CLIENT CONFIG CREATED"); action.run(c)}.unsafeRunSync()
+    clientConfig.use(action.run).unsafeRunSync()
 
   /** Testing helper to run a test with a temporary namespace that will be deleted after the test. */
   private def tempNs[R : AsResult](runTest: String => R): Result = {
@@ -98,16 +88,11 @@ object BasicTests extends Specification {
       )
     )
 
-    println("CREATING NS")
-
     run(
       for {
         _          <- CoreV1Api.createCoreV1Namespace[IO](body = ns)
-        _           = println(s"CREATED NS: $nsName")
         testResult  = AsResult(runTest(nsName))
-        _           = println("RAN TEST")
         _          <- CoreV1Api.deleteCoreV1Namespace[IO](nsName)
-        _           = println("DELETED NS")
       } yield testResult
     )
   }
