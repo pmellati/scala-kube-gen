@@ -1,4 +1,4 @@
-import mill._, scalalib._, scalafmt._, define._
+import mill._, scalalib._, scalafmt._, define._, publish._
 
 object openapigen extends ScalaModule {
   def scalaVersion = "2.13.0"
@@ -31,7 +31,7 @@ object openapigen extends ScalaModule {
   }
 }
 
-object kubeclient extends ScalaModule with ScalafmtModule {
+object kubeclient extends ScalaModule with ScalafmtModule with PublishModule {
   override def scalaVersion = "2.12.10"
 
   override def scalacOptions = Seq(
@@ -64,6 +64,19 @@ object kubeclient extends ScalaModule with ScalafmtModule {
         scalafmtConfig().head
       )
   }
+
+  override def pomSettings = PomSettings(
+    description = artifactName(),
+    organization = "me.pouria",
+    url = "https://github.com/pmellati/scala-openapi-gen",
+    licenses = Seq(License.MIT),
+    versionControl = VersionControl.github("pmellati", "scala-openapi-gen"),
+    developers = Seq(
+      Developer("pmellati", "Pouria Mellati", "https://github.com/pmellati")
+    )
+  )
+
+  override def publishVersion = "0.0.1-SNAPSHOT"
 
   object test extends Tests {
     def testFrameworks = Seq(
