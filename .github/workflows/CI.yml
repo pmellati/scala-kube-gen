@@ -22,7 +22,7 @@ jobs:
 
       - uses: jodersky/setup-mill@master
         with:
-          mill-version: 0.5.1
+          mill-version: 0.5.3
 
       - name: Test openapigen
         run: mill openapigen.test
@@ -43,3 +43,22 @@ jobs:
 
       - name: Test kubeclient
         run: mill kubeclient.test
+
+      - name: Publish to sonatype (master branch only)
+        if: github.ref == 'refs/heads/master'
+        run: |
+          echo "${{ secrets.GPG_PRIVATE_KEY_B64 }}" | base64 --decode | gpg --batch --import
+
+          mill openapigen.publish \
+            --sonatypeCreds "${{ secrets.SONATYPE_USERNAME }}:${{ secrets.SONATYPE_PASSWORD }}" \
+            --gpgPassphrase "${{ secrets.GPG_PASSPHRASE }}" \
+            --readTimeout 600000 \
+            --release false \
+            --signed true
+
+          mill kubeclient.publish \
+            --sonatypeCreds "${{ secrets.SONATYPE_USERNAME }}:${{ secrets.SONATYPE_PASSWORD }}" \
+            --gpgPassphrase "${{ secrets.GPG_PASSPHRASE }}" \
+            --readTimeout 600000 \
+            --release false \
+            --signed true
