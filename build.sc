@@ -1,4 +1,3 @@
-import $ivy.`com.lihaoyi::mill-contrib-bloop:$MILL_VERSION`
 import mill._, scalalib._, scalafmt._, define._
 
 object openapigen extends ScalaModule {
