@@ -76,7 +76,7 @@ object kubeclient extends ScalaModule with ScalafmtModule with PublishModule {
     )
   )
 
-  override def publishVersion = "0.0.1-SNAPSHOT"
+  override def publishVersion = "0.0.1"
 
   object test extends Tests {
     def testFrameworks = Seq(
