@@ -54,11 +54,11 @@ jobs:
             --gpgPassphrase "${{ secrets.GPG_PASSPHRASE }}" \
             --readTimeout 600000 \
             --release false \
-            --signed true
+            --signed false    # mill signing is broken. Enable signing after it's fixed.
 
           mill kubeclient.publish \
             --sonatypeCreds "${{ secrets.SONATYPE_USERNAME }}:${{ secrets.SONATYPE_PASSWORD }}" \
             --gpgPassphrase "${{ secrets.GPG_PASSPHRASE }}" \
             --readTimeout 600000 \
             --release false \
-            --signed true
+            --signed false    # mill signing is broken. Enable signing after it's fixed.
