@@ -10,6 +10,37 @@ The primary motivation for this project is to support the latest versions of the
 
 The project is still at very early stages, and requires a good amount of polishing. However, most of the core translation logic is implemented.
 
+## Getting started (snapshots)
+
+At the moment, only snapshot releases are available, since the project is not fully ready.
+
+### mill
+
+```scala
+// Add the sonatype snapshots repo.
+def repositories = super.repositories ++ Seq(
+  MavenRepository("https://oss.sonatype.org/content/repositories/snapshots")
+)
+
+// Add library dependencies.
+def ivyDeps = Agg(
+  ivy"me.pouria::kubeclient:0.0.1-SNAPSHOT",
+  // or:
+  ivy"me.pouria::openapigen:0.0.1-SNAPSHOT",
+)
+```
+
+### sbt
+
+```scala
+// Add the sonatype snapshots repo.
+resolvers += Resolver.sonatypeRepo("snapshots"),
+// Add library dependencies.
+libraryDependencies += "me.pouria" %% "kubeclient" % "0.0.1-SNAPSHOT"
+// or:
+libraryDependencies += "me.pouria" %% "openapigen" % "0.0.1-SNAPSHOT"
+```
+
 ## Generated source code
 
 The generated sources can be found under [the `generated-sources` branch](https://github.com/pmellati/scala-openapi-gen/tree/generated-sources/kubeclient/generatedSrc/kubeclient).
